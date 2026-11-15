@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Caminho até a F1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..800&family=Geist+Mono:wght@400..600&display=swap">
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/components.css">
+<link rel="stylesheet" href="css/screens.css">
+</head>
+<body>
+<div id="app">
+  <aside id="rail"></aside>
+  <div id="main">
+    <header id="topbar"></header>
+    <div id="body">
+      <main id="screen"></main>
+      <aside id="feed"></aside>
+    </div>
+  </div>
+</div>
+<div id="modal-root"></div>
+<div id="toast"></div>
+
+<!-- Ordem de carga: núcleo > dados > sistemas > interface > main -->
+<script src="js/core/namespace.js"></script>
+<script src="js/core/rng.js"></script>
+<script src="js/core/utils.js"></script>
+<script src="js/core/storage.js"></script>
+
+<script src="js/data/config.js"></script>
+<script src="js/data/categories.js"></script>
+<script src="js/data/circuits.js"></script>
+<script src="js/data/teams.js"></script>
+<script src="js/data/names.js"></script>
+<script src="js/data/drivers.js"></script>
+<script src="js/data/cards.js"></script>
+<script src="js/data/traits.js"></script>
+<script src="js/data/origins.js"></script>
+<script src="js/data/assets.js"></script>
+<script src="js/data/sponsors.js"></script>
+<script src="js/data/events.js"></script>
+<script src="js/data/records.js"></script>
+
+<script src="js/systems/attributes.js"></script>
+<script src="js/systems/news.js"></script>
+<script src="js/systems/world.js"></script>
+<script src="js/systems/calendar.js"></script>
+<script src="js/systems/race.js"></script>
+<script src="js/systems/superlicense.js"></script>
+<script src="js/systems/economy.js"></script>
+<script src="js/systems/contracts.js"></script>
+<script src="js/systems/pressure.js"></script>
+<script src="js/systems/records.js"></script>
+<script src="js/systems/career.js"></script>
+
+<script src="js/ui/dom.js"></script>
+<script src="js/ui/charts.js"></script>
+<script src="js/ui/ui.js"></script>
+<script src="js/ui/screens/menu.js"></script>
+<script src="js/ui/screens/creation.js"></script>
+<script src="js/ui/screens/hub.js"></script>
+<script src="js/ui/screens/season.js"></script>
+<script src="js/ui/screens/race.js"></script>
+<script src="js/ui/screens/contract.js"></script>
+<script src="js/ui/screens/assets.js"></script>
+<script src="js/ui/screens/people.js"></script>
+<script src="js/ui/screens/drivers.js"></script>
+<script src="js/ui/screens/records.js"></script>
+<script src="js/ui/screens/career.js"></script>
+<script src="js/ui/screens/ending.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+/* Design tokens (inspirado em Geist/Astryx): cores, tipografia, raios e movimento.
+   Tema = data-theme (dark|light) · Cor de destaque = data-accent (red|papaya|teal|blue) no <html>. */
+:root{
+  --u:clamp(11px,min(1.75vh,1.1vw),17px); --fit:1;
+  --sans:'Geist',ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --mono:'Geist Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --r:.65rem; --r-sm:.45rem; --rail:11.5rem; --feed:15.5rem;
+  --ease:cubic-bezier(.2,.8,.2,1);
+  --gold:#f4c95d; --silver:#c4c8d0; --bronze:#d9925f;
+  /* escuro (padrão) */
+  --bg:#09090b; --surface:#111114; --surface-2:#17171b; --surface-3:#202026;
+  --line:rgba(255,255,255,.075); --line-strong:rgba(255,255,255,.15);
+  --text:#f2f2f4; --text-2:#a6a6b0; --text-3:#6f6f7b; --grid:rgba(255,255,255,.028);
+  --ok:#3dd68c; --warn:#f5b941; --bad:#ff5a67; --info:#5aa9ff;
+  --shadow:0 1px 0 rgba(255,255,255,.04) inset,0 10px 30px -18px rgba(0,0,0,.8);
+  --accent:#f03a3a; --accent-ink:#fff;
+}
+html[data-theme="light"]{
+  --bg:#f3f3f0; --surface:#ffffff; --surface-2:#f6f6f3; --surface-3:#ebebe7;
+  --line:rgba(0,0,0,.09); --line-strong:rgba(0,0,0,.18);
+  --text:#0d0d10; --text-2:#52525c; --text-3:#8a8a95; --grid:rgba(0,0,0,.04);
+  --ok:#0f9d62; --warn:#b97a06; --bad:#d6293b; --info:#1c6fd1;
+  --shadow:0 1px 2px rgba(0,0,0,.05),0 12px 30px -20px rgba(0,0,0,.25);
+}
+html[data-accent="red"]{--accent:#f03a3a;--accent-ink:#fff}
+html[data-accent="papaya"]{--accent:#ff8a1f;--accent-ink:#1a0e00}
+html[data-accent="teal"]{--accent:#19d3c1;--accent-ink:#031a17}
+html[data-accent="blue"]{--accent:#4d8dff;--accent-ink:#fff}
+html{--accent-soft:color-mix(in srgb,var(--accent) 14%,transparent);--accent-line:color-mix(in srgb,var(--accent) 40%,transparent);--accent-glow:color-mix(in srgb,var(--accent) 45%,transparent)}
