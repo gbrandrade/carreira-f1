@@ -6,7 +6,7 @@ Referências: Geist (Vercel), Astryx (Meta), Bklit (gráficos), craftUI, oxyn (l
 ## Princípios
 1. **Dados em primeiro lugar.** Interface de telemetria: números tabulares, rótulos em mono minúsculo, bordas de 1 px.
 2. **Um destaque só.** Neutros + 1 cor de destaque (`--accent`). Cores semânticas (ok/warn/bad/info) só para estado.
-3. **Sem scroll.** Telas cabem na janela. Listas usam `ui.paged`. `ui.autoFit()` reduz a escala se algo ultrapassar.
+3. **Sem scroll.** Telas cabem na janela. Listas usam `ui.paged`. `ui.calibrate()` mede todas as telas uma vez e `ui.autoFit()` aplica UMA escala única (a menor necessária). Tamanho escolhido pelo jogador: `ui.prefs.size` (`--zoom`).
 4. **Movimento com propósito.** Entrada de tela, carta da roleta, anéis e loader da corrida. Respeita `prefers-reduced-motion`.
 
 ## Tokens (css/tokens.css)

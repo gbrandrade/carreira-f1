@@ -1,7 +1,7 @@
 /* Base e estrutura da página. SEM SCROLL: tudo cabe na altura da janela.
    rem acompanha a altura (1rem ≈ 1,75vh) e --fit (ajuste automático em JS) reduz tudo se algo ultrapassar. */
 *{box-sizing:border-box;margin:0;padding:0}
-html{font-size:calc(var(--u)*var(--fit))}
+html{font-size:calc(var(--u)*var(--fit)*var(--zoom))}
 html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.35;-webkit-font-smoothing:antialiased}
 body{background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:2.4rem 2.4rem;background-position:-1px -1px}
 button,input,select{font:inherit;color:inherit}
@@ -20,3 +20,6 @@ body.full #body{grid-template-columns:minmax(0,1fr);padding:0}
 .screen{display:flex;flex-direction:column;gap:.7rem;min-height:0;flex:1;overflow:hidden;animation:screenIn .35s var(--ease)}
 @keyframes screenIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+/* Tamanhos grandes: o texto cresce e, se faltar espaço, cada painel rola por dentro (a página nunca rola). */
+html[data-size="g"] .panel,html[data-size="x"] .panel,html[data-size="g"] .screen,html[data-size="x"] .screen,html[data-size="g"] .creation,html[data-size="x"] .creation{overflow:auto;scrollbar-width:thin;scrollbar-color:var(--line-strong) transparent}

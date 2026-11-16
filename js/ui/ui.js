@@ -9,21 +9,46 @@
   const TITLES = { hub: 'Central do piloto', season: 'Temporada', race: 'Corrida', contract: 'Contrato', assets: 'Patrimônio', people: 'Pessoas e mídia', drivers: 'Pilotos', records: 'Recordes', career: 'Carreira' };
 
   // ---- temas (guardados à parte do save)
-  ui.prefs = { theme: 'dark', accent: 'red' };
+  ui.prefs = { theme: 'dark', accent: 'red', size: 'm' };
+  const ZOOMS = { p: .88, m: 1, g: 1.2, x: 1.45 }, SIZE_LABEL = { p: 'Compacto', m: 'Padrão', g: 'Grande', x: 'Extra grande' }, SIZE_ORDER = ['p', 'm', 'g', 'x'];
   try { Object.assign(ui.prefs, JSON.parse(localStorage.getItem('caminho-f1-ui') || '{}')); } catch (e) {}
   ui.applyPrefs = function () {
     document.documentElement.setAttribute('data-theme', ui.prefs.theme); document.documentElement.setAttribute('data-accent', ui.prefs.accent);
+    document.documentElement.setAttribute('data-size', ui.prefs.size); document.documentElement.style.setProperty('--zoom', ZOOMS[ui.prefs.size] || 1);
     try { localStorage.setItem('caminho-f1-ui', JSON.stringify(ui.prefs)); } catch (e) {}
   };
   ui.applyPrefs();
 
-  // ---- ajuste automático: se algo ultrapassar a tela, reduz levemente a escala (garante ZERO scroll)
+  // ---- ajuste automático: UMA escala para todas as telas (a menor necessária para tudo caber sem scroll).
+  // Nos tamanhos Grande/Extra o ajuste é desligado e cada painel rola por dentro quando faltar espaço.
+  ui.fitMin = 1;
+  const bigSize = () => ui.prefs.size === 'g' || ui.prefs.size === 'x';
+  const overflowing = () => [...document.querySelectorAll('#screen, #screen .panel, .modal, .creation, .menu')].some(e => e.scrollHeight > e.clientHeight + 2 || e.scrollWidth > e.clientWidth + 2);
   ui.autoFit = function () {
-    const root = document.documentElement; let f = 1; root.style.setProperty('--fit', 1);
-    const over = () => [...document.querySelectorAll('#screen, #screen .panel, .modal, .creation, .menu')].some(e => e.scrollHeight > e.clientHeight + 2 || e.scrollWidth > e.clientWidth + 2);
-    for (let i = 0; i < 9 && over(); i++) { f -= .04; root.style.setProperty('--fit', f.toFixed(2)); }
+    const root = document.documentElement;
+    if (bigSize()) { root.style.setProperty('--fit', 1); return; }
+    let f = ui.fitMin; root.style.setProperty('--fit', f);
+    for (let i = 0; i < 9 && overflowing(); i++) { f -= .04; root.style.setProperty('--fit', f.toFixed(2)); }
+    ui.fitMin = Math.min(ui.fitMin, f);
   };
-  window.addEventListener('resize', () => { clearTimeout(ui._rt); ui._rt = setTimeout(ui.autoFit, 120); });
+  // mede todas as telas uma vez (invisível) para que a escala não mude ao trocar de aba
+  ui.calibrate = function () {
+    const s = Game.state; if (!s || !s.player || bigSize()) return;
+    const cur = ui.current, app = document.getElementById('app'), root = document.getElementById('screen'), keep = [ui.assetsTab, ui.seasonTab];
+    app.style.visibility = 'hidden';
+    try {
+      const variants = [['hub'], ['season', 'seasonTab', ['pilotos', 'equipes', 'cal']], ['race'], ['contract'], ['assets', 'assetsTab', ['bens', 'inv', 'spo', 'res']], ['people'], ['drivers'], ['records'], ['career']];
+      variants.forEach(([n, key, opts]) => (opts || [null]).forEach(o => { if (key) ui[key] = o; ui.current = n; root.innerHTML = ''; root.append(ui.screens[n].render()); ui.autoFit(); }));
+    } catch (e) { /* medição é opcional */ }
+    ui.assetsTab = keep[0]; ui.seasonTab = keep[1]; ui.current = cur; app.style.visibility = '';
+  };
+  ui.setSize = function (k) {
+    ui.prefs.size = k; ui.applyPrefs(); ui.fitMin = 1; ui._calibrated = false; ui.refresh(); ui.toast('Tamanho: ' + SIZE_LABEL[k]);
+  };
+  ui.bump = d => { const i = Math.max(0, Math.min(SIZE_ORDER.length - 1, SIZE_ORDER.indexOf(ui.prefs.size) + d)); if (SIZE_ORDER[i] !== ui.prefs.size) ui.setSize(SIZE_ORDER[i]); };
+  ui.SIZES = SIZE_ORDER.map(k => [k, SIZE_LABEL[k]]);
+  window.addEventListener('resize', () => { clearTimeout(ui._rt); ui._rt = setTimeout(() => { ui.fitMin = 1; ui._calibrated = false; ui.refresh(); }, 150); });
+  window.addEventListener('keydown', e => { if (/INPUT|SELECT|TEXTAREA/.test(e.target.tagName) || e.ctrlKey || e.metaKey) return; if (e.key === '+' || e.key === '=') ui.bump(1); else if (e.key === '-') ui.bump(-1); });
 
   ui.go = function (name) { ui.current = name; ui.refresh(); };
   ui.refresh = function () {
@@ -32,6 +57,7 @@
     const root = document.getElementById('screen'); root.innerHTML = '';
     root.append(ui.screens[ui.current].render());
     if (!full) ui.renderChrome();
+    if (!full && !ui._calibrated) { ui._calibrated = true; ui.calibrate(); ui.refresh(); return; }
     requestAnimationFrame(ui.autoFit);
   };
 
@@ -47,7 +73,8 @@
     top.append(h('span', { class: 'crumb' }, 'Caminho ', h('span', { class: 'dim' }, '/'), ' ', h('b', null, TITLES[ui.current] || '')), h('span', { class: 'sp' }),
       h('span', { class: 'pill' }, ui.icon('user', 13), h('b', null, p.name), `(${p.country})`), h('span', { class: 'pill' }, 'Idade ', h('b', null, s.year - p.birth)), h('span', { class: 'pill' }, h('b', null, s.year)),
       h('span', { class: 'pill' }, h('b', null, cat.short), p.contract ? ' · ' + p.contract.teamName : ''), h('span', { class: 'pill' }, 'GER ', ui.rate(ger)),
-      h('span', { class: 'pill' }, ui.icon('wallet', 13), h('b', { class: p.money < 0 ? 'bad' : '' }, U.fmtMoney(p.money))));
+      h('span', { class: 'pill' }, ui.icon('wallet', 13), h('b', { class: p.money < 0 ? 'bad' : '' }, U.fmtMoney(p.money))),
+      h('span', { class: 'seg' }, h('button', { title: 'Diminuir (tecla -)', onclick: () => ui.bump(-1) }, 'A−'), h('button', { title: 'Aumentar (tecla +)', onclick: () => ui.bump(1) }, 'A+')));
     const feed = document.getElementById('feed'); feed.innerHTML = '';
     feed.append(ui.panel({ title: 'Atividade', cls: 'grow' }, s.news.slice(0, 8).map(n => h('div', { class: 'feed-item ' + n.kind }, h('span', { class: 'dot' }), h('div', null, h('div', { class: 'y' }, n.y), h('div', { class: 't' }, n.text))))));
   };
@@ -94,6 +121,7 @@
     const file = h('input', { type: 'file', accept: '.json', style: { display: 'none' }, onchange: e => { const f = e.target.files[0]; if (f) Game.core.storage.importFile(f).then(st => { Game.state = st; ui.toast('Save importado'); document.querySelectorAll('.overlay').forEach(o => o.remove()); ui.go(st.phase === 'ended' ? 'ending' : 'hub'); }).catch(() => ui.toast('Arquivo inválido')); } });
     const accents = [['red', 'Vermelho'], ['papaya', 'Papaya'], ['teal', 'Petronas'], ['blue', 'Azul']];
     const body = h('div', { class: 'col', style: { gap: '.7rem' } }, file,
+      h('div', { class: 'col gap-s' }, h('div', { class: 'row between' }, h('span', { class: 'mut' }, 'Tamanho da interface'), ui.tabs(ui.SIZES, ui.prefs.size, k => { document.querySelectorAll('.overlay').forEach(o => o.remove()); ui.setSize(k); ui.settings(); })), h('div', { class: 'tiny dim' }, 'Atalhos: tecla + e tecla −. Em Grande e Extra grande, alguns painéis podem rolar por dentro.')),
       h('div', { class: 'row between' }, h('span', { class: 'mut' }, 'Tema'), ui.tabs([['dark', 'Escuro'], ['light', 'Claro']], ui.prefs.theme, t => { ui.prefs.theme = t; ui.applyPrefs(); document.querySelectorAll('.overlay').forEach(o => o.remove()); ui.refresh(); ui.settings(); })),
       h('div', { class: 'row between' }, h('span', { class: 'mut' }, 'Cor de destaque'), ui.tabs(accents, ui.prefs.accent, t => { ui.prefs.accent = t; ui.applyPrefs(); document.querySelectorAll('.overlay').forEach(o => o.remove()); ui.refresh(); ui.settings(); })),
       h('div', { class: 'row' }, ui.btn('Salvar agora', () => { S.career.save(); ui.toast('Jogo salvo'); }, '', false, 'save'), ui.btn('Exportar', () => Game.core.storage.exportFile(s), '', false, 'download'), ui.btn('Importar', () => file.click(), '', false, 'swap')));

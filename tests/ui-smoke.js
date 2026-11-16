@@ -26,7 +26,7 @@ JSDOM.fromFile(require('path').join(__dirname, '..', 'index.html'), { runScripts
           click('Iniciar temporada'); modalLoop(); if (!visited.size && G.state.year > 2018) { tour(); G.ui.go('hub'); } continue;
         }
         if (s.season.finished) { G.ui.go('hub'); click('Encerrar temporada'); modalLoop(); seasons++; continue; }
-        G.ui.go('race'); G.ui.simDelay = 0; click('Largar'); if (!has('Continuar')) { console.log('sem resultado'); break; }
+        G.ui.go('race'); G.ui.simDelay = 0; { const cands = btns().filter(x => /^(Largar|Descansar)$/.test(x.textContent.trim()) && !x.disabled); cands[cands.length - 1].click(); } if (!has('Continuar')) { console.log('sem resultado'); break; }
         // alterna abas do resultado
         [...d.querySelectorAll('.tabs button')].forEach(b => b.click());
         click('Continuar'); modalLoop();
