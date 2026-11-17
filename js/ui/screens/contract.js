@@ -217,7 +217,7 @@
         h('span', { class: 'pt' }, 'Academia de pilotos'),
         seekBtn
       ),
-      h('div', { class: 'tiny dim' }, 'Você pode procurar uma academia a qualquer momento da base ou aguardar um convite após bons resultados.')
+      h('div', { class: 'tiny dim' }, 'Conquiste pódios, vitórias e títulos na base para atrair academias da F1 e melhorar os termos do contrato.')
     );
   }
 

@@ -5,7 +5,7 @@ Game.data.events = [
     { label: 'Participar da gravação e ações de mídia', fx: { pop: 6, money: 25000, acadRep: 7, mental: -1 } },
     { label: 'Focar apenas no simulador e recusar', fx: { acadRep: -12, train: .15 } }
   ] },
-  { id: 'acad_tpc', title: 'Teste privado de F1 (TPC)', text: 'A academia liberou um carro de F1 de duas temporadas atrás para um dia de testes privados.', minLv: 3, maxLv: 7, w: 3, cond: s => !!(s.player.academy && s.player.academy.active), choices: [
+  { id: 'acad_tpc', title: 'Teste privado de F1 (TPC)', text: 'Com sua Licença Grau A em dia, a academia liberou um carro de F1 de duas temporadas atrás para testes privados.', minLv: 3, maxLv: 7, w: 3, cond: s => !!(s.player.academy && s.player.academy.active && Game.systems.contracts && Game.systems.contracts.f1TestEligibility(s).tpcEligible), choices: [
     { label: 'Completar programa completo de voltas', fx: { train: .55, rep: 4, acadRep: 6, phys: -3 } }
   ] },
   { id: 'acad_sponsor', title: 'Evento com patrocinadores da marca', text: 'Os patrocinadores principais da sua academia pedem sua presença em um evento VIP.', minLv: 2, maxLv: 7, w: 2.5, cond: s => !!(s.player.academy && s.player.academy.active), choices: [

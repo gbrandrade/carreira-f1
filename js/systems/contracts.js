@@ -260,15 +260,81 @@
     Con.genAcademyOffers(s);
   };
 
+  /* Calcula o nível de histórico real do piloto na base (corridas, pódios, vitórias e títulos). */
+  Con.juniorTrackRecord = function (p) {
+    const st = p.stats || { races: 0, wins: 0, podiums: 0, poles: 0, titles: 0 };
+    const last = p.lastSeason || null;
+    // Pontuação de currículo real construída na pista (0 a 100+)
+    let score = st.titles * 24 + st.wins * 5 + st.podiums * 2.2 + st.poles * 1.5 + Math.min(20, st.races * 0.4);
+    if (last && !last.reserve) {
+      if (last.champ) score += 16;
+      else if (last.pos <= 3) score += 9;
+      else if (last.pos <= 6) score += 4;
+    }
+    return {
+      score,
+      races: st.races || 0,
+      wins: st.wins || 0,
+      podiums: st.podiums || 0,
+      titles: st.titles || 0
+    };
+  };
+
+  /* Verifica elegibilidade FIA para Teste Privado F1 (TPC) e Treino Livre Oficial (FP1). */
+  Con.f1TestEligibility = function (s) {
+    const p = s.player, cur = C[p.catId], age = s.year - p.birth;
+    const tr = Con.juniorTrackRecord(p);
+    const sl = SL.status(p, s.year);
+    const inSingleSeater = !!cur.single;
+    const ssSeasons = (p.singleSeaterSeasons || 0) + (inSingleSeater && (p.season && p.season.rounds >= 2) ? 0.5 : 0);
+
+    // Exceção FIA de 17 anos: habilidade e maturidade comprovadas em monopostos
+    const has17Waiver = age === 17 && inSingleSeater && ssSeasons >= 1 && (tr.wins >= 2 || tr.titles >= 1 || Con.ger(s) >= 80);
+    const ageOk = age >= 18 || has17Waiver;
+
+    // Licença Internacional Grau A / experiência em monopostos exigida para TPC
+    const licenceGradeA = inSingleSeater && (ssSeasons >= 1 || tr.races >= 6);
+    const tpcEligible = ageOk && licenceGradeA;
+
+    // Free Practice Only Super Licence (FP1 oficial): 25 pts SL ou participação na F2
+    const fp1Eligible = ageOk && (sl.total >= 25 || cur.id === 'f2');
+
+    let reason = '';
+    if (!inSingleSeater) reason = 'Exige estar competindo em monopostos (F4 ou superior) para Licença Grau A.';
+    else if (!ageOk) reason = `Idade mínima FIA: 18 anos (ou 17 com exceção por mérito em monopostos; atual: ${age}a).`;
+    else if (!licenceGradeA) reason = 'Exige mais rodagem/temporada em monopostos para emitir Licença Grau A.';
+
+    return {
+      tpcEligible,
+      fp1Eligible,
+      has17Waiver,
+      age,
+      slTotal: sl.total,
+      reason
+    };
+  };
+
   Con.buildAcademyOffer = function (s, meta) {
-    const p = s.player, cur = C[p.catId], ger = Con.ger(s);
+    const p = s.player, cur = C[p.catId];
+    const tr = Con.juniorTrackRecord(p);
     const agBonus = Con.agentMod(p, 'academyBonus', 0);
-    const diff = ger - cur.mean;
-    const coverage = (diff >= 8 || agBonus > 0.1) ? 0.90 : diff >= 4 ? 0.80 : 0.65;
-    const stipend = cur.level >= 6 ? 60000 : cur.level >= 4 ? 30000 : 15000;
-    const tests = cur.level >= 5 ? 2 : 1;
+
+    // Tier do contrato da academia baseado exclusivamente no histórico real de pista (não no OVR inicial)
+    // Tier 1 (Observação / Junior Entry): poucos resultados -> cobertura 50%-60%, bolsa baixa/zero
+    // Tier 2 (Promessa / Desenvolvimento): pódios e vitórias -> cobertura 70%-80%, bolsa moderada
+    // Tier 3 (Estrela da Academia): títulos e vitórias consistentes -> cobertura 85%-100%, bolsa cheia
+    const tier = (tr.titles >= 2 || (tr.titles >= 1 && tr.wins >= 5) || tr.score >= 55) ? 3
+      : (tr.titles >= 1 || tr.wins >= 2 || tr.podiums >= 4 || tr.score >= 22) ? 2
+      : 1;
+
+    const baseCov = tier === 3 ? 0.90 : tier === 2 ? 0.72 : 0.55;
+    const coverage = Math.min(1.0, Math.round((baseCov + agBonus * 0.3) * 100) / 100);
+    const stipend = tier === 3 ? (cur.level >= 6 ? 75000 : 40000) : tier === 2 ? (cur.level >= 5 ? 30000 : 15000) : 0;
+    const tests = tier === 3 ? 2 : 1;
+    const years = tier >= 2 ? 3 : 2;
+
     const terms = {
-      years: 3,
+      years,
       coverage,
       stipend,
       f1TestsPerYear: tests,
@@ -280,18 +346,18 @@
       name: meta.name,
       f1Teams: meta.f1Teams || [],
       color: meta.color || '#f03a3a',
+      tier,
       terms,
       base: Object.assign({}, terms),
       tried: false
     };
   };
 
-  /* Gera ofertas espontâneas de Academia de Pilotos em qualquer fase da base (antes da F1). */
+  /* Gera ofertas espontâneas de Academia de Pilotos com base em resultados reais na pista (nunca com 0 corridas). */
   Con.genAcademyOffers = function (s, forceAdd) {
     const p = s.player, cur = C[p.catId], y = s.year, age = y - p.birth;
     if (!s.academyOffers) s.academyOffers = [];
 
-    // Nunca oferece academia na F1
     if (cur.id === 'f1' || (s.flags && s.flags.wasF1)) {
       s.academyOffers = [];
       return;
@@ -303,15 +369,15 @@
       return;
     }
 
-    if (cur.level < 1 || age > 22) {
+    // Exige estar pelo menos no Kart Brasileiro (level >= 1), idade <= 22 e ter histórico mínimo na pista
+    const tr = Con.juniorTrackRecord(p);
+    if (cur.level < 1 || age > 22 || tr.races < 3) {
       if (!forceAdd) s.academyOffers = [];
       return;
     }
 
-    const ger = Con.ger(s);
-    const hasBaseAgent = Con.agentMod(p, 'academyBonus', 0) > 0;
-    const qualified = forceAdd || ger >= cur.mean + 2 || hasBaseAgent || (p.lastSeason && p.lastSeason.pos <= 4);
-    if (!qualified) {
+    const hasProvenResults = forceAdd || tr.titles >= 1 || tr.wins >= 2 || tr.podiums >= 3 || (p.lastSeason && p.lastSeason.pos <= 3);
+    if (!hasProvenResults) {
       if (!forceAdd) s.academyOffers = [];
       return;
     }
@@ -319,19 +385,19 @@
     const pool = (D.academies || []).filter(a => (!acad || a.id !== acad.id) && !s.academyOffers.some(o => o.acadId === a.id));
     if (!pool.length) return;
 
-    const count = forceAdd ? 1 : (ger >= cur.mean + 7 ? 2 : 1);
+    const count = forceAdd ? 1 : (tr.titles >= 1 || tr.wins >= 4 ? 2 : 1);
     const picked = R.shuffle(pool).slice(0, count);
 
     if (forceAdd) {
       const off = Con.buildAcademyOffer(s, picked[0]);
       s.academyOffers.push(off);
-      Game.systems.news.add(`ACADEMIA: A ${off.name} enviou um convite oficial para seu programa de desenvolvimento!`, 'good');
+      Game.systems.news.add(`ACADEMIA: A ${off.name} enviou um convite oficial após seus resultados na pista!`, 'good');
     } else {
       s.academyOffers = picked.map(m => Con.buildAcademyOffer(s, m));
     }
   };
 
-  /* Permite que o jogador busque proativamente contato com Academias de Pilotos a qualquer momento (exceto na F1). */
+  /* Permite buscar contato com Academias de Pilotos a qualquer momento na base, exigindo histórico mínimo de corridas. */
   Con.seekAcademy = function (s) {
     const p = s.player, cur = C[p.catId], age = s.year - p.birth;
     if (cur.id === 'f1' || (s.flags && s.flags.wasF1)) {
@@ -344,6 +410,12 @@
     if (age > 23) {
       return { ok: false, msg: 'As academias buscam pilotos até 23 anos.' };
     }
+
+    const tr = Con.juniorTrackRecord(p);
+    if (tr.races < 3 || (tr.podiums === 0 && tr.wins === 0 && tr.titles === 0)) {
+      return { ok: false, msg: 'Construa um histórico mínimo primeiro (dispute ao menos 3 etapas e conquiste um pódio).' };
+    }
+
     if (!s.academyOffers) s.academyOffers = [];
     if (s.academyOffers.length >= 3) {
       return { ok: false, msg: 'Você já tem propostas de academias aguardando resposta.' };
@@ -352,35 +424,37 @@
     const pool = (D.academies || []).filter(a => !s.academyOffers.some(o => o.acadId === a.id));
     if (!pool.length) return { ok: false, msg: 'Nenhuma outra academia disponível no momento.' };
 
-    const ger = Con.ger(s);
     const rep = p.reputation != null ? p.reputation : 45;
     const agBonus = Con.agentMod(p, 'academyBonus', 0);
-    const chance = cl(0.45 + (ger - cur.mean) * 0.04 + (rep - 45) * 0.008 + agBonus, 0.25, 0.92);
+    const chance = cl(0.28 + tr.score * 0.012 + (rep - 45) * 0.006 + agBonus, 0.20, 0.92);
 
     if (R.chance(chance)) {
       const meta = R.pick(pool);
       const off = Con.buildAcademyOffer(s, meta);
       s.academyOffers.push(off);
-      Game.systems.news.add(`Prospecção: A ${off.name} aceitou abrir negociações com você!`, 'good');
+      Game.systems.news.add(`Prospecção: A ${off.name} analisou seu histórico e enviou uma proposta!`, 'good');
       Game.systems.career.save();
       return { ok: true, msg: `${off.name} respondeu ao contato e enviou uma proposta!` };
     }
     Game.systems.career.save();
-    return { ok: false, msg: 'As academias pediram mais resultados na pista antes de abrir vaga.' };
+    return { ok: false, msg: 'As academias pediram mais pódios ou títulos no currículo antes de abrir vaga.' };
   };
 
+  /* Chance de a Academia aceitar os termos negociados depende diretamente do currículo real (títulos, vitórias, pódios). */
   Con.academyChance = function (s, offer, nt) {
     const b = offer.base;
-    const covDiff = (nt.coverage - b.coverage) * 1.4;
-    const stipDiff = (nt.stipend - b.stipend) / 100000;
-    const testDiff = (nt.f1TestsPerYear - b.f1TestsPerYear) * 0.22;
+    const tr = Con.juniorTrackRecord(s.player);
+    const covDiff = (nt.coverage - b.coverage) * 1.85;
+    const stipDiff = (nt.stipend - b.stipend) / 75000;
+    const testDiff = (nt.f1TestsPerYear - b.f1TestsPerYear) * 0.28;
     const mediaHelp = (nt.mediaObligations - b.mediaObligations) * 0.14;
-    const yearHelp = (nt.years - b.years) * 0.05;
-    const ger = Con.ger(s), cur = C[s.player.catId];
+    const yearHelp = (nt.years - b.years) * 0.04;
+
+    // Sem títulos/vitórias expressivas, pedir 100% de cobertura ou bolsa alta é quase impossível
+    const historyLeverage = Math.min(0.28, tr.score * 0.005);
     const agBonus = Con.agentMod(s.player, 'academyBonus', 0) + Con.agentMod(s.player, 'contractTol', 0);
-    const talentBonus = Math.max(0, (ger - cur.mean) * 0.02) + agBonus;
     const demand = covDiff + stipDiff + testDiff - mediaHelp - yearHelp;
-    return cl(0.85 - demand + talentBonus, 0.08, 0.95);
+    return cl(0.76 - demand + historyLeverage + agBonus, 0.04, 0.94);
   };
 
   Con.negotiateAcademy = function (s, offer, nt) {
@@ -425,30 +499,39 @@
     return { ok: true, msg: `Você agora é piloto oficial da ${offer.name}!` };
   };
 
+  /* Executa Teste Privado de F1 (TPC - Testing Previous Cars) ou Treino Livre (FP1) seguindo as regras da FIA. */
   Con.runAcademyF1Test = function (s) {
     const p = s.player;
     if (p.catId === 'f1') return { ok: false, msg: 'Você já corre na Fórmula 1!' };
     const acad = Con.ensureAcademy(p);
     if (!acad) return { ok: false, msg: 'Você não pertence a uma academia.' };
     if ((acad.f1TestsLeft || 0) <= 0) return { ok: false, msg: 'Sem sessões de teste de F1 restantes neste ano.' };
+
+    const elig = Con.f1TestEligibility(s);
+    if (!elig.tpcEligible) {
+      return { ok: false, msg: `Bloqueado pela FIA: ${elig.reason}` };
+    }
     if (p.phys < 25) return { ok: false, msg: 'Físico muito desgastado para testar um F1.' };
 
     acad.f1TestsLeft--;
     p.phys = cl(p.phys - 6, 0, 100);
-    p.train = Math.min(Game.config.trainCap + 2, (p.train || 0) + 0.55);
+    const isFP1 = elig.fp1Eligible;
+    p.train = Math.min(Game.config.trainCap + 2, (p.train || 0) + (isFP1 ? 0.65 : 0.45));
     const growAttr = R.chance(0.5) ? 'RIT' : 'ATE';
-    A.growCap(p, growAttr, 0.35);
-    p.reputation = cl((p.reputation || 45) + 3, 0, 100);
+    A.growCap(p, growAttr, isFP1 ? 0.4 : 0.3);
+    p.reputation = cl((p.reputation || 45) + (isFP1 ? 4 : 2), 0, 100);
     acad.satisfaction = cl(acad.satisfaction + 4, 0, 100);
 
-    const yearTestPts = p.superPoints.filter(x => x.year === s.year && x.catId === 'f1_test').reduce((a, b) => a + b.pts, 0);
+    // Pela regra da FIA, apenas sessões oficiais de FP1 (Free Practice Only Super Licence, 25+ pts) concedem +1 pt de SL (máx. 10)
+    const yearFp1Pts = p.superPoints.filter(x => x.year === s.year && x.catId === 'f1_fp1').reduce((a, b) => a + b.pts, 0);
     let slMsg = '';
-    if (yearTestPts < 10) {
-      p.superPoints.push({ year: s.year, catId: 'f1_test', pts: 2 });
-      slMsg = ' · +2 pts superlicença';
+    if (isFP1 && yearFp1Pts < 10) {
+      p.superPoints.push({ year: s.year, catId: 'f1_fp1', pts: 1 });
+      slMsg = ' · +1 pt superlicença (FP1)';
     }
 
-    const msg = `Teste privado de F1 (${acad.name}): telemetria excelente (+${growAttr} teto, +Reputação${slMsg}).`;
+    const sessionLabel = isFP1 ? 'Treino Livre Oficial (FP1)' : 'Teste Privado TPC (carro anterior)';
+    const msg = `${sessionLabel} pela ${acad.name}: telemetria excelente (+${growAttr} teto, +Reputação${slMsg}).`;
     Game.systems.news.add(msg, 'good');
     Game.systems.career.save();
     return { ok: true, msg };

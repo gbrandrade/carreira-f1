@@ -105,28 +105,35 @@
             )
           : person('Companheiro de equipe', 'disponível durante a temporada'),
         acad
-          ? h('div', { class: 'tile', style: { gap: '.4rem', borderColor: 'var(--accent-line)' } },
-              h('div', { class: 'row between' },
-                h('span', { class: 'tchip' },
-                  h('i', { class: 'tbar', style: { background: acad.color || 'var(--accent)' } }),
-                  h('b', { class: 'small' }, acad.name)
+          ? (() => {
+              const elig = S.contracts.f1TestEligibility(s);
+              const testBtnLabel = elig.fp1Eligible ? `FP1 Oficial (${acad.f1TestsLeft})` : `Teste F1 TPC (${acad.f1TestsLeft})`;
+              return h('div', { class: 'tile', style: { gap: '.4rem', borderColor: 'var(--accent-line)' } },
+                h('div', { class: 'row between' },
+                  h('span', { class: 'tchip' },
+                    h('i', { class: 'tbar', style: { background: acad.color || 'var(--accent)' } }),
+                    h('b', { class: 'small' }, acad.name)
+                  ),
+                  ui.badge(`${acad.years} ano(s)`, 'acc')
                 ),
-                ui.badge(`${acad.years} ano(s)`, 'acc')
-              ),
-              ui.bar('Confiança', acad.satisfaction),
-              h('div', { class: 'row', style: { flexWrap: 'wrap' } },
-                ui.btn(`Teste F1 (${acad.f1TestsLeft})`, () => {
-                  const r = S.contracts.runAcademyF1Test(s);
-                  if (r.msg) ui.toast(r.msg);
-                  ui.refresh();
-                }, 'sm primary', !inSeason || (acad.f1TestsLeft || 0) <= 0, 'bolt'),
-                ui.btn(`Propaganda (${acad.mediaDone}/${acad.mediaObligations})`, () => {
-                  const r = S.contracts.runAcademyAd(s);
-                  if (r.msg) ui.toast(r.msg);
-                  ui.refresh();
-                }, 'sm', !inSeason || (acad.mediaDone || 0) >= (acad.mediaObligations || 1), 'mic')
-              )
-            )
+                ui.bar('Confiança', acad.satisfaction),
+                !elig.tpcEligible
+                  ? h('div', { class: 'tiny dim' }, `Teste F1 bloqueado (FIA): ${elig.reason}`)
+                  : h('div', { class: 'tiny ok' }, elig.fp1Eligible ? 'Licença FP1 (25+ pts SL) ativa: sessões oficiais liberadas.' : 'Licença Grau A ativa: testes privados TPC liberados (25 pts SL para FP1).'),
+                h('div', { class: 'row', style: { flexWrap: 'wrap' } },
+                  ui.btn(testBtnLabel, () => {
+                    const r = S.contracts.runAcademyF1Test(s);
+                    if (r.msg) ui.toast(r.msg);
+                    ui.refresh();
+                  }, 'sm primary', !inSeason || !elig.tpcEligible || (acad.f1TestsLeft || 0) <= 0, 'bolt'),
+                  ui.btn(`Propaganda (${acad.mediaDone}/${acad.mediaObligations})`, () => {
+                    const r = S.contracts.runAcademyAd(s);
+                    if (r.msg) ui.toast(r.msg);
+                    ui.refresh();
+                  }, 'sm', !inSeason || (acad.mediaDone || 0) >= (acad.mediaObligations || 1), 'mic')
+                )
+              );
+            })()
           : (!inF1
               ? h('div', { class: 'tile', style: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: '.55rem .7rem' } },
                   h('div', null,
