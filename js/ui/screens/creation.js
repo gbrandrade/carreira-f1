@@ -40,7 +40,8 @@
       const card = h('div', { class: 'pcard', 'data-tier': c.tier },
         h('div', { class: 'row between' }, h('span', { class: 'tier ' + c.tier }, D.tierLabels[c.tier]), h('span', { class: 'row' }, ui.ccode(c.country), ui.badge('GER ' + c.GER))),
         h('div', null, h('div', { class: 'nm' }, c.name), h('div', { class: 'mut small', style: { marginTop: '.3rem' } }, 'Escolha 1 atributo para roubar. Atributos já escolhidos ficam bloqueados.')),
-        h('div', { class: 'attrs4' }, KEYS.map(k => {
+        h('div', { class: 'cardradar' }, ui.radar(AX, [{ values: [c.RIT, c.RAC, c.ATE, c.EXP], color: c.tier === 'lendario' ? 'var(--gold)' : c.tier === 'bom' ? 'var(--ok)' : 'var(--accent)' }], { min: 30 })),
+        h('div', { class: 'attrs4', style: { marginTop: '0' } }, KEYS.map(k => {
           const used = cr.picks[k] != null;
           return h('button', { class: 'attr-box ' + (used ? 'used' : ''), onclick: () => { if (used) return; cr.picks[k] = c[k]; cr.src[k] = c.name; if (Object.keys(cr.picks).length === 4) { cr.step = 'summary'; cr.traits = R.shuffle(D.traits).slice(0, 2).map(t => t.id); } else draw(cr); ui.refresh(); } },
             h('span', { class: 'l' }, NAMES[k]), h('span', { class: 'v' }, c[k]), ui.meter(c[k], { auto: false, segments: 14 }), h('span', { class: 'tiny dim' }, used ? 'já escolhido' : 'roubar atributo'));
@@ -56,7 +57,7 @@
         h('div', { class: 'cols2' },
           ui.panel({ title: 'Atributos', cls: 'marks' }, h('div', { class: 'grow' }, ui.radar(AX, [{ values: vals(cr) }], { min: 0 })), KEYS.map(k => h('div', { class: 'row between small' }, h('span', null, `${NAMES[k]}`), h('span', { class: 'mut' }, `de ${cr.src[k]}`), h('b', { class: 'mono' }, cr.picks[k])))),
           h('div', { class: 'col', style: { gap: '.7rem' } },
-            ui.panel({ title: 'GER máximo projetado' }, h('div', { class: 'row' }, ui.ring(ger, 100, { size: 110, fs: 30, sub: 'GER' }), h('div', { class: 'mut small' }, 'É o teto do seu potencial. Você cresce em direção a ele com treino, resultados e sorte.'))),
+            ui.panel({ title: 'GER máximo projetado' }, h('div', { class: 'row' }, ui.ring(ger, 100, { size: 92, fs: 30, sub: 'GER' }), h('div', { class: 'mut small' }, 'É o teto do seu potencial. Você cresce em direção a ele com treino, resultados e sorte.'))),
             ui.panel({ title: 'Traços de personalidade', cls: 'grow' }, cr.traits.map(id => { const t = D.traits.find(x => x.id === id); return h('div', { class: 'row' }, ui.plate('bolt', 'var(--accent)'), h('div', null, h('b', null, t.name), h('div', { class: 'small mut' }, t.desc))); })))),
         h('div', { class: 'row between' }, ui.btn('Refazer roleta', () => restart(cr), 'ghost', false, 'swap'),
           ui.btn('Começar carreira', () => {

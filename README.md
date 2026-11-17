@@ -24,14 +24,10 @@ Regra de ouro: `data/` guarda números e listas, `systems/` guarda regras, `ui/`
 O visual é o design system "Paddock" (tema escuro/claro e 4 cores de destaque, em Configurações ou na tela inicial). Veja `DESIGN.md`.
 A fonte Geist vem do Google Fonts: sem internet, o jogo usa a fonte do sistema e continua funcionando.
 
-## Tamanho da interface
-Botões **A−** e **A+** na barra superior, teclas **+** e **−**, ou Menu ☰ > Tamanho (Compacto, Padrão, Grande, Extra grande).
-O zoom do navegador (Ctrl +) não altera o jogo porque o layout acompanha o tamanho da janela; use os controles do jogo.
-Nos tamanhos Grande e Extra grande o ajuste automático é desligado e alguns painéis podem rolar por dentro.
-
 ## Sem scroll
-O layout usa `100dvh` e `rem` proporcional à altura da janela (`html{font-size:clamp(11px,min(1.75vh,1.1vw),17px)}`).
-Listas longas usam paginação (`ui.paged`) em vez de scroll.
+A escala é FIXA e igual em todas as telas, sem opções e sem JavaScript: `html{font-size:clamp(10px,min(1.9vh,1.2vw),40px)}` em `css/tokens.css`
+(1rem = 1,9% da altura da janela). Se quiser o jogo maior ou menor, mude só esse 1.9vh (valores acima de ~2.0vh começam a cortar conteúdo).
+Listas longas usam paginação (`ui.paged`) em vez de scroll. Testado em 1280x720, 1366x657, 1920x950, 1920x1080 e 2560x1300.
 
 ## O que é estimado (revisar)
 - Início em `startYear` (2018, aos 12 anos). Os pilotos reais têm notas de 2026 e são envelhecidos/rejuvenescidos pela idade

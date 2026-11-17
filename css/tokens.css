@@ -1,7 +1,7 @@
 /* Design tokens (inspirado em Geist/Astryx): cores, tipografia, raios e movimento.
    Tema = data-theme (dark|light) · Cor de destaque = data-accent (red|papaya|teal|blue) no <html>. */
 :root{
-  --u:clamp(11px,min(1.75vh,1.1vw),44px); --fit:1; --zoom:1;
+  --u:clamp(10px,min(1.9vh,1.2vw),40px);
   --sans:'Geist',ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
   --mono:'Geist Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   --r:.65rem; --r-sm:.45rem; --rail:11.5rem; --feed:15.5rem;

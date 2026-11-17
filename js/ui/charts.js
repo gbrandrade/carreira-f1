@@ -89,7 +89,7 @@
       if (!i) d = `M${p1[0].toFixed(1)},${p1[1].toFixed(1)}`;
       d += ` C${(p1[0] + (p2[0] - p0[0]) / 6).toFixed(1)},${(p1[1] + (p2[1] - p0[1]) / 6).toFixed(1)} ${(p2[0] - (p3[0] - p1[0]) / 6).toFixed(1)},${(p2[1] - (p3[1] - p1[1]) / 6).toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
     }
-    const s = `<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet"><path d="${d}Z" fill="none" stroke="var(--line-strong)" stroke-width="7" stroke-linejoin="round"/><path d="${d}Z" fill="none" stroke="var(--surface-2)" stroke-width="5.4" stroke-linejoin="round"/>
+    const s = `<svg viewBox="-14 -14 128 128" preserveAspectRatio="xMidYMid meet"><path d="${d}Z" fill="none" stroke="var(--line-strong)" stroke-width="7" stroke-linejoin="round"/><path d="${d}Z" fill="none" stroke="var(--surface-2)" stroke-width="5.4" stroke-linejoin="round"/>
       <path d="${d}Z" fill="none" stroke="var(--accent)" stroke-width="1.1" stroke-dasharray="2.2 2.6" stroke-linecap="round"/><circle cx="${P[0][0].toFixed(1)}" cy="${P[0][1].toFixed(1)}" r="2.6" fill="var(--accent)"/></svg>`;
     return svgWrap('track', s);
   };
