@@ -1,8 +1,8 @@
-/* Reputação no Paddock, Popularidade, Família, Saúde, Lesões e Eventos Aleatórios. */
+/* Reputação no Paddock, Popularidade, Família, Saúde, Academia, Lesões e Eventos Aleatórios. */
 (function () {
   const D = Game.data, R = Game.rng, U = Game.utils, C = D.categories, cl = U.clamp;
   const P = Game.systems.pressure = {};
-  const LABEL = { money: 'Dinheiro', rep: 'Reputação', pop: 'Popularidade', family: 'Família', mental: 'Mente', phys: 'Físico', train: 'Evolução' };
+  const LABEL = { money: 'Dinheiro', rep: 'Reputação', pop: 'Popularidade', family: 'Família', mental: 'Mente', phys: 'Físico', train: 'Evolução', acadRep: 'Academia' };
 
   P.mult = (s, k) => s.player.traits.reduce((m, id) => { const t = D.traits.find(x => x.id === id); return m * ((t && t.mod[k]) || 1); }, 1);
 
@@ -30,6 +30,12 @@
         v = Math.round(v);
         p.reputation = cl(p.reputation + v, 0, 100);
         if (v) parts.push(`${LABEL.rep} ${v > 0 ? '+' : ''}${v}`);
+      } else if (k === 'acadRep') {
+        if (p.academy && p.academy.active && Game.systems.contracts && Game.systems.contracts.adjustAcademySat) {
+          const d = Math.round(v);
+          Game.systems.contracts.adjustAcademySat(s, d, 'compromisso ou comportamento fora da pista');
+          if (d) parts.push(`${LABEL.acadRep} ${d > 0 ? '+' : ''}${d}`);
+        }
       } else if (k === 'family') {
         v = v < 0 ? v * P.mult(s, 'pressureLoss') : v;
         v = Math.round(v);
@@ -51,7 +57,13 @@
         const sp = Game.systems.economy.addSpecificSponsorOffer(s);
         parts.push(sp ? `Nova proposta de patrocínio: ${sp.name}` : 'Nova proposta de patrocínio disponível');
       } else if (k === 'flag') {
-        p.flags[v] = true;
+        if (v === 'academy' && Game.systems.contracts && Game.systems.contracts.genAcademyOffers) {
+          p.flags[v] = true;
+          Game.systems.contracts.genAcademyOffers(s, true);
+          parts.push('Proposta de Academia de Pilotos recebida');
+        } else {
+          p.flags[v] = true;
+        }
       }
     });
 
@@ -69,7 +81,6 @@
     return parts.join(' · ');
   };
 
-  // recuperação entre etapas
   P.regen = function (s) {
     const p = s.player, f = Game.systems.economy.effects(s);
     P.ensure(p);
@@ -78,7 +89,6 @@
     p.popularity = cl(p.popularity + f.pop / 8, 0, 100);
   };
 
-  // impacto da corrida nas barras (Reputação no Paddock + Popularidade)
   P.afterRace = function (s, week) {
     const p = s.player, last = week.results[week.results.length - 1], me = last.player;
     P.ensure(p);
@@ -93,11 +103,19 @@
     if (me.pos === 1 && !me.dnf) { repDelta += 2; popDelta += 4; }
     else if (me.pos <= 3 && !me.dnf) { repDelta += 1; popDelta += 2; }
 
-    // Duelo direto com o companheiro na corrida
     const mateRow = last.order.find(o => o.id !== 'player' && o.teamId === me.teamId);
     if (mateRow && !me.dnf) {
       if (mateRow.dnf || me.pos < mateRow.pos) repDelta += 1.2;
       else if (me.pos > mateRow.pos + 2) repDelta -= 1.0;
+    }
+
+    // Impacto direto na Academia de Pilotos (resultados, batidas e punições)
+    if (p.academy && p.academy.active && Game.systems.contracts && Game.systems.contracts.adjustAcademySat) {
+      let acadDelta = cl(delta * 0.8, -5, 4);
+      if (me.dnf && me.crash) acadDelta -= 6;
+      if (me.pen) acadDelta -= 3;
+      if (me.pos === 1 && !me.dnf) acadDelta += 3;
+      Game.systems.contracts.adjustAcademySat(s, Math.round(acadDelta), me.dnf && me.crash ? 'acidente evitável na pista' : 'desempenho abaixo do esperado');
     }
 
     const fx = {

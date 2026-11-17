@@ -59,7 +59,7 @@
     },
     pre(s) {
       const p = s.player, se = s.season, cal = se.cal[se.round], cat = C[se.catId], r = ui.race, inj = p.injury > 0, cc = cal.circuit;
-      const isJunior = cat.level <= 6;
+      const isJunior = cat.level <= 7;
       const isRes = S.career.isReserve(p);
       const isCallUp = isRes && !!se.reserveCallUp;
       const wetLikely = cc.rain >= 35;
@@ -124,12 +124,15 @@
           const ev = wk.midEvent;
           ui.modal({
             title: ev.title,
-            body: h('div', { class: 'col', style: { gap: '.6rem' } },
-              h('div', { class: 'row', style: { alignItems: 'flex-start' } }, ui.plate('mic', 'var(--accent)', true), h('div', { class: 'mut' }, ev.text))
+            body: h('div', { class: 'col', style: { gap: '.65rem' } },
+              h('div', { class: 'row', style: { alignItems: 'flex-start' } }, ui.plate('mic', 'var(--accent)', true), h('div', { class: 'mut' }, ev.text)),
+              h('div', { class: 'col', style: { gap: '.35rem', borderTop: '1px solid var(--line)', paddingTop: '.5rem' } },
+                ev.options.map(opt => h('div', { class: 'tiny mut' }, h('b', { style: { color: 'var(--text)' } }, opt.label + ': '), opt.sub))
+              )
             ),
             stack: true,
             actions: ev.options.map(opt => ({
-              label: `${opt.label} — ${opt.sub}`,
+              label: opt.label,
               icon: 'right',
               fn: () => {
                 S.race.applyMidRaceChoice(s, wk, opt.id);

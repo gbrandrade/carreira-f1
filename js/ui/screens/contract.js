@@ -1,4 +1,4 @@
-/* Contratos: situação atual, superlicença, ofertas e negociação. */
+/* Contratos: equipe de corrida, Academia de Pilotos (negociação e gestão) e superlicença. */
 (function () {
   const ui = Game.ui, h = ui.h, U = Game.utils, C = Game.data.categories, S = Game.systems, M = U.fmtMoney;
   const salLabel = t => t.salary >= 0 ? 'Salário/ano' : 'Você paga/ano';
@@ -13,9 +13,6 @@
       ui.btn('', () => { nt[key] = Math.min(max, nt[key] + step); draw(); }, 'sm icon', false, 'plus')
     ));
 
-    // Stepper dedicado para salário/pagamento:
-    // Quando nt.salary >= 0 ("Salário/ano"): '-' diminui o salário, '+' aumenta o salário.
-    // Quando nt.salary < 0 ("Você paga/ano"): '-' diminui o quanto você paga (aproxima de 0), '+' aumenta o quanto você paga (mais negativo).
     const salaryStp = () => {
       const paying = nt.salary < 0;
       const onMinus = () => {
@@ -39,7 +36,7 @@
     };
 
     const tog = (label, key) => h('div', { class: 'row between' }, h('span', { class: 'mut small' }, label), ui.btn(nt[key] ? 'Sim' : 'Não', () => { nt[key] = !nt[key]; draw(); }, 'sm ' + (nt[key] ? 'on' : '')));
-    const bs = Math.max(5000, Math.round(Math.abs(o.base.bTitle) / 8 / 5000) * 5000) || 5000;
+    const bs = Math.max(1000, Math.round(Math.abs(o.base.bTitle) / 8 / 1000) * 1000) || 5000;
 
     function draw() {
       body.innerHTML = ''; const pr = S.contracts.chance(s, o, nt);
@@ -47,8 +44,8 @@
         stp('Duração (anos)', 'years', 1, 1, 4),
         salaryStp(),
         stp('Bônus por título', 'bTitle', bs, 0, 1e9, M),
-        stp('Bônus por vitória', 'bWin', Math.max(1000, bs / 5), 0, 1e9, M),
-        stp('Bônus por pódio', 'bPodium', Math.max(1000, bs / 8), 0, 1e9, M),
+        stp('Bônus por vitória', 'bWin', Math.max(1000, Math.round(bs / 5 / 1000) * 1000), 0, 1e9, M),
+        stp('Bônus por pódio', 'bPodium', Math.max(1000, Math.round(bs / 8 / 1000) * 1000), 0, 1e9, M),
         stp('Bônus por ponto', 'bPoint', 1000, 0, 1e9, M),
         tog('Cláusula de saída para equipe maior', 'exit'),
         tog('Opção de renovação', 'option'),
@@ -60,13 +57,146 @@
     ui.modal({ title: `Negociar com ${o.teamName}`, body, width: '36rem', actions: [{ label: 'Cancelar' }, { label: 'Propor', cls: 'primary', fn: () => { const r = S.contracts.negotiate(s, o, nt); ui.toast(r.msg); ui.refresh(); } }] });
   }
 
+  function negotiateAcademyModal(off) {
+    const s = Game.state;
+    const nt = Object.assign({}, off.terms);
+    const body = h('div', { class: 'col', style: { gap: '.6rem' } });
+
+    const stp = (label, valText, onMinus, onPlus) => h('div', { class: 'row between' },
+      h('span', { class: 'mut small' }, label),
+      h('div', { class: 'stepper' },
+        ui.btn('', onMinus, 'sm icon', false, 'minus'),
+        h('b', null, valText),
+        ui.btn('', onPlus, 'sm icon', false, 'plus')
+      )
+    );
+
+    function draw() {
+      body.innerHTML = '';
+      const pr = S.contracts.academyChance(s, off, nt);
+      body.append(
+        stp('Duração do programa', `${nt.years} ano(s)`,
+          () => { nt.years = Math.max(2, nt.years - 1); draw(); },
+          () => { nt.years = Math.min(5, nt.years + 1); draw(); }
+        ),
+        stp('Cobertura dos custos da base', `${Math.round(nt.coverage * 100)}%`,
+          () => { nt.coverage = Math.max(0.5, Math.round((nt.coverage - 0.05) * 100) / 100); draw(); },
+          () => { nt.coverage = Math.min(1.0, Math.round((nt.coverage + 0.05) * 100) / 100); draw(); }
+        ),
+        stp('Bolsa / ajuda de custo anual', M(nt.stipend),
+          () => { nt.stipend = Math.max(0, nt.stipend - 15000); draw(); },
+          () => { nt.stipend = Math.min(180000, nt.stipend + 15000); draw(); }
+        ),
+        stp('Testes privados de F1 (TPC/ano)', `${nt.f1TestsPerYear} teste(s)`,
+          () => { nt.f1TestsPerYear = Math.max(1, nt.f1TestsPerYear - 1); draw(); },
+          () => { nt.f1TestsPerYear = Math.min(3, nt.f1TestsPerYear + 1); draw(); }
+        ),
+        stp('Propagandas e eventos/ano', `${nt.mediaObligations} ação(ões)`,
+          () => { nt.mediaObligations = Math.max(1, nt.mediaObligations - 1); draw(); },
+          () => { nt.mediaObligations = Math.min(4, nt.mediaObligations + 1); draw(); }
+        ),
+        h('div', { class: 'row between', style: { borderTop: '1px solid var(--line)', paddingTop: '.5rem' } },
+          h('span', { class: 'mut' }, 'Chance de aceitarem'),
+          ui.badge(pr >= .75 ? 'Alta' : pr >= .45 ? 'Média' : 'Baixa', pr >= .75 ? 'ok' : pr >= .45 ? 'warn' : 'bad')
+        )
+      );
+    }
+    draw();
+
+    ui.modal({
+      title: `Negociar programa · ${off.name}`,
+      body,
+      width: '36rem',
+      actions: [
+        { label: 'Cancelar' },
+        {
+          label: 'Propor termos',
+          cls: 'primary',
+          fn: () => {
+            const r = S.contracts.negotiateAcademy(s, off, nt);
+            ui.toast(r.msg);
+            ui.refresh();
+          }
+        }
+      ]
+    });
+  }
+
   function offerCard(o, s) {
     const t = o.terms, afford = S.contracts.canAfford(s, o), cat = C[o.catId];
+    const effCost = S.contracts.effectiveCost(s, t.salary);
+    const acad = S.contracts.ensureAcademy(s.player);
+    const hasAcadDiscount = t.salary < 0 && acad && acad.coverage > 0 && effCost < Math.abs(t.salary);
+
     return h('div', { class: 'offer ' + (afford ? '' : 'dis') },
-      h('div', { class: 'row between' }, ui.teamChip(o.teamName, o.teamId, o.catId), h('span', { class: 'row' }, o.academy ? ui.badge(o.academy, 'acc') : null, o.note ? ui.badge(o.note) : null, ui.badge(cat.short, 'info'))),
+      h('div', { class: 'row between' },
+        ui.teamChip(o.teamName, o.teamId, o.catId),
+        h('span', { class: 'row' },
+          o.note ? ui.badge(o.note, o.note.includes('Salto') || o.note.includes('acelerada') ? 'acc' : '') : null,
+          ui.badge(cat.short, 'info')
+        )
+      ),
       ui.bar('Carro', o.car, { auto: false, text: o.car }),
-      h('div', { class: 'kv3' }, [['Duração', t.years + ' ano(s)'], [salLabel(t), M(Math.abs(t.salary))], ['Bônus título', M(t.bTitle)]].map(([k, v]) => h('div', null, h('div', { class: 'k' }, k), h('div', { class: 'v', style: { color: k !== 'Duração' && t.salary < 0 && k !== 'Bônus título' ? 'var(--warn)' : '' } }, v)))),
-      h('div', { class: 'row' }, ui.btn('Aceitar', () => { const r = S.contracts.accept(s, o); ui.toast(r.msg); ui.refresh(); }, 'primary sm', !afford, 'check'), ui.btn(o.tried ? 'Já negociada' : 'Negociar', () => negotiate(o), 'sm', o.tried || !afford, 'swap'), !afford ? h('span', { class: 'tiny bad' }, 'sem fundos') : null, t.exit ? ui.badge('cláusula de saída') : null)
+      h('div', { class: 'kv3' }, [
+        ['Duração', t.years + ' ano(s)'],
+        [salLabel(t), hasAcadDiscount ? `${M(effCost)} (c/ bolsa)` : M(Math.abs(t.salary))],
+        ['Bônus título', M(t.bTitle)]
+      ].map(([k, v]) => h('div', null, h('div', { class: 'k' }, k), h('div', { class: 'v', style: { color: k !== 'Duração' && t.salary < 0 && k !== 'Bônus título' ? 'var(--warn)' : '' } }, v)))),
+      h('div', { class: 'row' },
+        ui.btn('Aceitar', () => { const r = S.contracts.accept(s, o); ui.toast(r.msg); ui.refresh(); }, 'primary sm', !afford, 'check'),
+        ui.btn(o.tried ? 'Já negociada' : 'Negociar', () => negotiate(o), 'sm', o.tried || !afford, 'swap'),
+        !afford ? h('span', { class: 'tiny bad' }, 'sem fundos') : null,
+        t.exit ? ui.badge('cláusula de saída') : null
+      )
+    );
+  }
+
+  function academySection(s) {
+    const p = s.player;
+    const acad = S.contracts.ensureAcademy(p);
+    const aOffers = s.academyOffers || [];
+
+    if (acad) {
+      return h('div', { class: 'col', style: { borderTop: '1px solid var(--line)', paddingTop: '.55rem', gap: '.4rem' } },
+        h('div', { class: 'row between' },
+          h('span', { class: 'pt' }, 'Academia de pilotos'),
+          ui.badge(`${acad.years} ano(s) rest.`, 'acc')
+        ),
+        h('div', { class: 'row between' },
+          h('span', { class: 'tchip' },
+            h('i', { class: 'tbar', style: { background: acad.color || 'var(--accent)' } }),
+            h('b', { class: 'small' }, acad.name)
+          ),
+          h('span', { class: 'tiny mono mut' }, `Cobre ${Math.round(acad.coverage * 100)}% · ${M(acad.stipend)}/ano`)
+        ),
+        ui.bar('Confiança', acad.satisfaction),
+        h('div', { class: 'tiny mut' }, `Testes F1 (TPC): ${acad.f1TestsLeft}/${acad.f1TestsPerYear} · Mídia: ${acad.mediaDone}/${acad.mediaObligations} · Cuidado: punições e maus resultados causam demissão.`)
+      );
+    }
+
+    if (aOffers.length) {
+      const off = aOffers[0];
+      const t = off.terms;
+      return h('div', { class: 'col', style: { borderTop: '1px solid var(--line)', paddingTop: '.55rem', gap: '.4rem' } },
+        h('div', { class: 'row between' },
+          h('span', { class: 'pt' }, 'Convite de Academia'),
+          ui.badge('NOVA PROPOSTA', 'acc')
+        ),
+        h('div', { class: 'tchip' },
+          h('i', { class: 'tbar', style: { background: off.color || 'var(--accent)' } }),
+          h('b', { class: 'small' }, off.name)
+        ),
+        h('div', { class: 'tiny mut' }, `${t.years} anos · cobre ${Math.round(t.coverage * 100)}% da inscrição + ${M(t.stipend)}/ano + ${t.f1TestsPerYear} teste(s) F1/ano`),
+        h('div', { class: 'row' },
+          ui.btn('Assinar programa', () => { const r = S.contracts.acceptAcademy(s, off); ui.toast(r.msg); ui.refresh(); }, 'primary sm', false, 'check'),
+          ui.btn(off.tried ? 'Negociado' : 'Negociar', () => negotiateAcademyModal(off), 'sm', off.tried, 'swap')
+        )
+      );
+    }
+
+    return h('div', { class: 'col', style: { borderTop: '1px solid var(--line)', paddingTop: '.55rem', gap: '.25rem' } },
+      h('span', { class: 'pt' }, 'Academia de pilotos'),
+      h('div', { class: 'tiny dim' }, 'Destaque-se nas categorias de base para receber proposta de uma academia oficial da F1.')
     );
   }
 
@@ -81,9 +211,10 @@
         h('div', { class: 'row' }, c.exit ? ui.badge('cláusula de saída', 'ok') : null, c.option ? ui.badge('opção de renovação', 'ok') : null),
         ui.btn('Rescindir contrato', () => ui.confirm('Rescindir?', c.exit ? 'Sem multa (cláusula de saída).' : `Multa de ${M(Math.round(Math.abs(c.salary) * .5))}.`, () => { const r = S.contracts.terminate(s); ui.toast(r.msg || ''); ui.refresh(); }), 'sm', s.phase === 'season')
       ] : h('div', { class: 'row' }, ui.plate('alert', 'var(--warn)', true), h('div', null, h('b', null, 'Você está sem contrato'), h('div', { class: 'small mut' }, 'Escolha uma das ofertas ao lado.'))),
+        academySection(s),
         h('div', { class: 'grow' }),
-        h('div', { class: 'row', style: { borderTop: '1px solid var(--line)', paddingTop: '.6rem' } }, ui.ring(sl.total, sl.need, { size: 64, text: sl.total, sub: '/ 40', fs: 24, color: sl.eligible ? 'var(--ok)' : 'var(--warn)' }),
-          h('div', { class: 'col gap-s' }, h('b', null, 'Superlicença da FIA'), sl.eligible ? ui.badge('apto para a F1', 'ok') : h('div', { class: 'tiny mut' }, `40 pontos em 3 anos · 18 anos (você: ${sl.age}) · 2 temporadas de monoposto (${p.singleSeaterSeasons}).`)))
+        h('div', { class: 'row', style: { borderTop: '1px solid var(--line)', paddingTop: '.55rem' } }, ui.ring(sl.total, sl.need, { size: 60, text: sl.total, sub: '/ 40', fs: 22, color: sl.eligible ? 'var(--ok)' : 'var(--warn)' }),
+          h('div', { class: 'col gap-s' }, h('b', null, 'Superlicença da FIA'), sl.eligible ? ui.badge('apto para a F1', 'ok') : h('div', { class: 'tiny mut' }, `40 pts em 3 anos · 18 anos (você: ${sl.age}) · 2 anos monoposto (${p.singleSeaterSeasons}).`)))
       );
 
       let right;

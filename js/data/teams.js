@@ -136,12 +136,12 @@
   };
 
   Game.data.academies = [
-    'Ferrari Driver Academy',
-    'Red Bull Junior Team',
-    'Mercedes Junior Team',
-    'McLaren Driver Development Programme',
-    'Alpine Academy',
-    'Williams Driver Academy',
-    'Sauber / Audi Academy'
+    { id: 'fda', name: 'Ferrari Driver Academy', f1Teams: ['haa', 'aud', 'fer'], color: '#E80020', sponsorGroup: 'banco' },
+    { id: 'rbjt', name: 'Red Bull Junior Team', f1Teams: ['rbs', 'rb'], color: '#3671C6', sponsorGroup: 'energetico' },
+    { id: 'merc', name: 'Mercedes Junior Team', f1Teams: ['wil', 'mer'], color: '#27F4D2', sponsorGroup: 'petroleo' },
+    { id: 'mcl', name: 'McLaren Driver Development Programme', f1Teams: ['mcl'], color: '#FF8000', sponsorGroup: 'tech' },
+    { id: 'alp', name: 'Alpine Academy', f1Teams: ['alp'], color: '#FF87BC', sponsorGroup: 'agua' },
+    { id: 'wil', name: 'Williams Driver Academy', f1Teams: ['wil'], color: '#64C4FF', sponsorGroup: 'cartao' },
+    { id: 'aud', name: 'Sauber / Audi Academy', f1Teams: ['aud'], color: '#F50537', sponsorGroup: 'telecom' }
   ];
 })();

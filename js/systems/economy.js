@@ -235,10 +235,18 @@
 
   E.payEntry = function (s) {
     const p = s.player, cost = E.entryCost(s);
+    const acad = Game.systems.contracts && Game.systems.contracts.ensureAcademy(p);
+    const fromAcad = acad ? Math.min(cost, Math.round(cost * (acad.coverage || 0))) : 0;
+    const remAfterAcad = Math.max(0, cost - fromAcad);
     p.supportLeft = E.nextSupport(s);
-    const fromFam = Math.min(p.supportLeft, cost);
-    p.supportLeft -= fromFam; p.money -= (cost - fromFam);
-    return { cost, fromFam, fromPocket: cost - fromFam };
+    const fromFam = Math.min(p.supportLeft, remAfterAcad);
+    p.supportLeft -= fromFam;
+    const fromPocket = remAfterAcad - fromFam;
+    p.money -= fromPocket;
+    if (fromAcad > 0) {
+      Game.systems.news.add(`${acad.name} cobriu ${U.fmtMoney(fromAcad)} (${Math.round(acad.coverage * 100)}%) da sua inscrição.`);
+    }
+    return { cost, fromAcad, fromFam, fromPocket };
   };
 
   E.seasonEnd = function (s) {
@@ -251,6 +259,10 @@
       contractInc += (st.champion ? c.bTitle : 0) + st.wins * c.bWin + st.podiums * c.bPodium + st.points * c.bPoint;
     }
     add('Salário e bônus', contractInc);
+    const acad = Game.systems.contracts && Game.systems.contracts.ensureAcademy(p);
+    if (acad && acad.stipend > 0) {
+      add(`Bolsa ${acad.name}`, acad.stipend);
+    }
 
     const remainingSponsors = [];
     p.sponsors.forEach(x => {

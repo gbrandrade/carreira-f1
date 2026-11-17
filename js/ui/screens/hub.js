@@ -9,6 +9,7 @@
       const capEXP = Math.min(99, A.E(28) + pk.EXPb), cap = { RIT: pk.RIT, RAC: pk.RAC, ATE: pk.ATE, EXP: capEXP }, capGer = A.playerCapGer(p);
       const sl = S.superlicense.status(p, s.year);
       const isRes = S.career.isReserve(p);
+      const acad = S.contracts.ensureAcademy(p);
       let pos = null, pts = 0;
       if (se && s.phase === 'season') { const r = S.race.ranked(se).find(x => x.id === 'player'); if (r) { pos = r.pos; pts = r.pts; } }
 
@@ -35,11 +36,12 @@
         p.injury > 0 ? ui.badge(`Lesionado · ${p.injury} etapa(s)`, 'bad') : h('div', { class: 'row', style: { flexWrap: 'wrap' } }, p.traits.map(id => ui.badge(Game.data.traits.find(t => t.id === id).name)))
       );
 
-      return h('div', { class: 'screen' }, ui.head(`Olá, ${p.name.split(' ')[0]}`, `${cat.name} · ${s.year}${p.contract ? ' · ' + p.contract.teamName : ''}`), stats, h('div', { class: 'hubmid' }, radar, estado, this.next(s)));
+      return h('div', { class: 'screen' }, ui.head(`Olá, ${p.name.split(' ')[0]}`, `${cat.name} · ${s.year}${p.contract ? ' · ' + p.contract.teamName : ''}${acad ? ' · ' + acad.name : ''}`), stats, h('div', { class: 'hubmid' }, radar, estado, this.next(s)));
     },
     next(s) {
       const p = s.player, se = s.season;
       const isRes = S.career.isReserve(p);
+      const acad = S.contracts.ensureAcademy(p);
       let title, sub, btn, art = null, info = null, rightTag = null;
       if (s.phase === 'offseason' && !p.contract) { title = 'Fora de temporada'; sub = 'Você precisa de um contrato para disputar o próximo ano.'; btn = ui.btn('Negociar contrato', () => ui.go('contract'), 'primary lg', false, 'doc'); }
       else if (s.phase === 'offseason') { title = `Temporada ${s.year}`; sub = `Contrato assinado com ${p.contract.teamName}.`; btn = ui.btn('Iniciar temporada', () => { S.career.startSeason(); ui.go('hub'); }, 'primary lg', false, 'play'); }
@@ -51,7 +53,7 @@
         sub = `Etapa ${n.idx + 1} de ${se.cal.length} · ${U.monthOfWeek(n.week)}${n.sprint ? ' · sprint' : ''}`;
         art = ui.track(n.circuit.id);
         if (isRes) rightTag = se.reserveCallUp ? ui.badge('convocado!', 'ok') : ui.badge('reserva', 'info');
-        else if (cat.level <= 6 && S.career.isKeyJuniorRound(s)) rightTag = ui.badge('momento-chave', 'acc');
+        else if (cat.level <= 7 && S.career.isKeyJuniorRound(s)) rightTag = ui.badge('momento-chave', 'acc');
         info = h('div', { class: 'row' }, ui.badge(n.circuit.rain + '% chuva', n.circuit.rain >= 30 ? 'warn' : ''), ui.ccode(n.circuit.country));
         btn = ui.btn(isRes && !se.reserveCallUp ? 'Ir para fim de semana' : 'Próxima etapa', () => ui.go('race'), 'primary lg', false, 'flag');
       }

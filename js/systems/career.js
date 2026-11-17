@@ -8,7 +8,7 @@
   Car.newGame = function (setup) {
     const s = {
       v: 1, year: cfg.startYear, phase: 'offseason', player: null, world: null, season: null,
-      offers: [], sponsorOffers: [], news: [], timeline: [], flags: {}, ending: null, summary: null
+      offers: [], academyOffers: [], sponsorOffers: [], news: [], timeline: [], flags: {}, ending: null, summary: null
     };
     Game.state = s;
     const o = D.origins.find(x => x.id === setup.origin), L = cfg.luckRange;
@@ -222,7 +222,7 @@
   /* Verifica se a próxima etapa em categorias de base (Kart, F4, FREC, F3) é um momento-chave. */
   Car.isKeyJuniorRound = function (s) {
     const se = s.season, cat = C[se.catId];
-    if (!se || se.finished || cat.level >= 7) return true;
+    if (!se || se.finished || cat.level >= 8) return true;
     // Parada obrigatória no meio da temporada para escolher foco de desenvolvimento do carro
     if (se.round === Math.floor(se.cal.length / 2)) return true;
 
@@ -248,7 +248,7 @@
     if (!se || se.finished || p.noSeat) return null;
 
     const isRes = Car.isReserve(p);
-    if (cat.level >= 7 && !isRes) return null;
+    if (cat.level >= 8 && !isRes) return null;
 
     const fromRound = se.round + 1;
     const startPts = p.season.points, startWins = p.season.wins, startPod = p.season.podiums;
@@ -374,6 +374,32 @@
     p.lastSeason = { pos, champ, pts: me ? me.pts : 0, catId: cat.id, year, reserve };
 
     if (p.contract) { p.contract.years--; if (p.contract.years <= 0) p.contract = null; }
+    const acad = S.contracts.ensureAcademy(p);
+    if (acad) {
+      // Penalidade se não cumpriu compromissos de mídia/propaganda da academia
+      const missedAds = Math.max(0, (acad.mediaObligations || 1) - (acad.mediaDone || 0));
+      if (missedAds > 0) {
+        S.contracts.adjustAcademySat(s, -missedAds * 8, 'não cumprimento das campanhas publicitárias');
+      }
+      // Avaliação anual de desempenho na pista pela Academia
+      if (S.contracts.ensureAcademy(p)) {
+        if (!reserve && played && pos > Math.ceil(se.cal.length > 0 ? Object.keys(se.entries).length * 0.45 : 10)) {
+          S.contracts.adjustAcademySat(s, -18, 'temporada muito abaixo das expectativas da academia');
+        } else if (champ || pos <= 3) {
+          S.contracts.adjustAcademySat(s, 10);
+        }
+      }
+      const stillAcad = S.contracts.ensureAcademy(p);
+      if (stillAcad) {
+        stillAcad.years--;
+        stillAcad.f1TestsLeft = stillAcad.f1TestsPerYear || 1;
+        stillAcad.mediaDone = 0;
+        if (stillAcad.years <= 0) {
+          S.news.both(`Seu contrato de ${stillAcad.yearsTotal} anos com a ${stillAcad.name} chegou ao fim.`);
+          p.academy = null;
+        }
+      }
+    }
     const nextYear = year + 1, ageNext = nextYear - p.birth;
     p.forcedUp = !reserve && cat.level < 8 && (champ || ageNext > cat.maxAge);
     if (p.forcedUp) p.contract = null;

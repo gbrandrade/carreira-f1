@@ -1,4 +1,4 @@
-/* Pessoas e mídia: agente, engenheiro, duelo com companheiro (H2H), reputação e desenvolvimento do carro. */
+/* Pessoas e mídia: agente, engenheiro, duelo com companheiro (H2H), Academia de Pilotos e desenvolvimento. */
 (function () {
   const ui = Game.ui, h = ui.h, D = Game.data, S = Game.systems;
   const FOCUS = [['Aerodinâmica', 'downforce e eficiência'], ['Motor', 'potência e entrega'], ['Confiabilidade', 'menos quebras'], ['Chassi e pneus', 'tração e desgaste'], ['Ritmo de classificação', 'volta rápida']];
@@ -15,6 +15,7 @@
   ui.screens.people = {
     render() {
       const s = Game.state, p = s.player, inSeason = s.phase === 'season' && s.season;
+      const acad = S.contracts.ensureAcademy(p);
       let mate = null;
       if (inSeason) {
         const m = S.world.entries(s, p.catId, false).find(e => e.teamId === p.teamId);
@@ -37,6 +38,30 @@
               )
             )
           : person('Companheiro de equipe', 'disponível durante a temporada'),
+        acad
+          ? h('div', { class: 'tile', style: { gap: '.4rem', borderColor: 'var(--accent-line)' } },
+              h('div', { class: 'row between' },
+                h('span', { class: 'tchip' },
+                  h('i', { class: 'tbar', style: { background: acad.color || 'var(--accent)' } }),
+                  h('b', { class: 'small' }, acad.name)
+                ),
+                ui.badge(`${acad.years} ano(s)`, 'acc')
+              ),
+              ui.bar('Confiança', acad.satisfaction),
+              h('div', { class: 'row', style: { flexWrap: 'wrap' } },
+                ui.btn(`Teste F1 (${acad.f1TestsLeft})`, () => {
+                  const r = S.contracts.runAcademyF1Test(s);
+                  if (r.msg) ui.toast(r.msg);
+                  ui.refresh();
+                }, 'sm primary', !inSeason || (acad.f1TestsLeft || 0) <= 0, 'bolt'),
+                ui.btn(`Propaganda (${acad.mediaDone}/${acad.mediaObligations})`, () => {
+                  const r = S.contracts.runAcademyAd(s);
+                  if (r.msg) ui.toast(r.msg);
+                  ui.refresh();
+                }, 'sm', !inSeason || (acad.mediaDone || 0) >= (acad.mediaObligations || 1), 'mic')
+              )
+            )
+          : null,
         h('div', { class: 'grow' }),
         h('div', { class: 'row', style: { flexWrap: 'wrap' } }, p.traits.map(id => ui.badge(D.traits.find(t => t.id === id).name, 'acc')))
       );
@@ -61,7 +86,7 @@
         h('div', { class: 'tiny ' + (half ? 'dim' : 'warn') }, half ? (p.devFocus ? `Foco escolhido: ${p.devFocus}` : 'Escolha o foco até o meio da temporada.') : 'Disponível apenas até a metade da temporada.')
       );
 
-      return h('div', { class: 'screen' }, ui.head('Pessoas e mídia', 'Relações, reputação no paddock e desenvolvimento do carro'), h('div', { class: 'cols3' }, people, media, dev));
+      return h('div', { class: 'screen' }, ui.head('Pessoas e mídia', 'Relações, academia de pilotos e desenvolvimento do carro'), h('div', { class: 'cols3' }, people, media, dev));
     }
   };
 })();

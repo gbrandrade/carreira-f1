@@ -1,5 +1,5 @@
 /* Categorias da escada. 'mean' = nota média dos pilotos gerados; 'carW' = peso do carro (o resto é do piloto).
-   'sl' = pontos de superlicença por posição final (valores de F4/Regional/Kart a confirmar). */
+   'sl' = pontos de superlicença por posição final. */
 (function () {
   const F1PTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
   const KART = [25, 22, 20, 18, 16, 14, 12, 10, 8, 6, 5, 4, 3, 2, 1];
@@ -34,8 +34,17 @@
   };
   Game.data.categories = C;
   Game.data.ladder = ['kartReg', 'kartNac', 'kartMun', 'f4br', 'f4eu', 'frec', 'f3', 'f2', 'f1'];
-  // para onde o piloto pode ir depois de cada categoria
-  Game.data.nextOptions = { kartReg: ['kartNac', 'kartMun'], kartNac: ['kartMun', 'f4br'], kartMun: ['f4br', 'f4eu', 'frec'], f4br: ['f4eu', 'frec', 'f3'], f4eu: ['frec', 'f3'], frec: ['f3', 'f2'], f3: ['f2'], f2: ['f1'], f1: [] };
-  // de onde vêm os pilotos que sobem para cada categoria (usado na renovação dos grids)
+  // Inclui saltos extraordinários: F4 -> F3, FREC -> F1 (prodígio geracional), F3 -> F1 (estilo Verstappen/Antonelli)
+  Game.data.nextOptions = {
+    kartReg: ['kartNac', 'kartMun'],
+    kartNac: ['kartMun', 'f4br'],
+    kartMun: ['f4br', 'f4eu', 'frec'],
+    f4br: ['f4eu', 'frec', 'f3'],
+    f4eu: ['frec', 'f3'],
+    frec: ['f3', 'f2', 'f1'],
+    f3: ['f2', 'f1'],
+    f2: ['f1'],
+    f1: []
+  };
   Game.data.feeders = { f1: ['f2'], f2: ['f3'], f3: ['frec', 'f4eu'], frec: ['f4eu', 'f4br'], f4eu: ['f4br', 'kartMun'], f4br: ['kartMun', 'kartNac'], kartMun: ['kartNac'], kartNac: ['kartReg'], kartReg: [] };
 })();

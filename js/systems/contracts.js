@@ -1,4 +1,4 @@
-/* Contratos e ofertas: titulares, pay drivers, academias e Piloto Reserva na F1. */
+/* Contratos de equipe, saltos de categoria em carreiras extraordinárias e Academia de Pilotos negociável. */
 (function () {
   const D = Game.data, R = Game.rng, U = Game.utils, C = D.categories, A = Game.systems.attributes, SL = Game.systems.superlicense, cl = U.clamp;
   const Con = Game.systems.contracts = {};
@@ -6,25 +6,100 @@
 
   Con.ger = s => A.playerAttrs(s.player, s.year).GER;
 
+  /* Normaliza estrutura da Academia (compatível com saves antigos onde era string). */
+  Con.ensureAcademy = function (p) {
+    if (!p || !p.academy) return null;
+    if (typeof p.academy === 'string') {
+      const meta = (D.academies || []).find(a => a.name === p.academy) || { id: 'acad', name: p.academy, f1Teams: ['rbs', 'haa'], color: '#f03a3a' };
+      p.academy = {
+        id: meta.id,
+        name: meta.name,
+        f1Teams: meta.f1Teams || [],
+        color: meta.color || '#f03a3a',
+        active: true,
+        years: 2,
+        yearsTotal: 2,
+        coverage: 0.85,
+        stipend: 30000,
+        f1TestsPerYear: 1,
+        f1TestsLeft: 1,
+        mediaObligations: 1,
+        mediaDone: 0,
+        satisfaction: 70
+      };
+    }
+    return p.academy.active ? p.academy : null;
+  };
+
+  /* Avalia se o piloto teve uma campanha extraordinária capaz de pular categorias (ex.: F3 -> F1, F4 -> F3). */
+  Con.isExtraordinary = function (s) {
+    const p = s.player, cur = C[p.catId], ger = Con.ger(s), last = p.lastSeason;
+    const rep = p.reputation != null ? p.reputation : 45;
+    if (!last || last.reserve) return false;
+    const dominantChamp = last.champ && ger >= cur.mean + 5 && rep >= 62;
+    const generational = last.pos <= 2 && ger >= cur.mean + 9 && rep >= 68;
+    return dominantChamp || generational;
+  };
+
+  /* Valores salariais realistas: sem contratos multimilionários precoces na base ou no 1º ano de F1. */
   Con.valueFor = function (s, catId, team, role) {
+    const p = s.player, c = C[catId], ger = Con.ger(s);
     if (role === 'reserve') {
-      return Math.round((250000 + 350000 * team.prestige) / 10000) * 10000;
+      return Math.round((150000 + 250000 * team.prestige) / 10000) * 10000;
     }
-    const c = C[catId], ger = Con.ger(s);
     if (catId === 'f1') {
-      return Math.round(Math.max(400000, 60000 * Math.pow(Math.max(0, ger - 66), 2)) * (.5 + .7 * team.prestige) / 10000) * 10000;
+      const f1Races = (p.f1 && p.f1.races) || 0;
+      const f1Seasons = Math.floor(f1Races / 18);
+      const f1Wins = (p.f1 && p.f1.wins) || 0;
+      const f1Titles = (p.f1 && p.f1.titles) || 0;
+      const rep = p.reputation != null ? p.reputation : 45;
+
+      // Estreante na F1: salário realista entre US$ 450 mil e US$ 1,8 mi (ou vaga paga em equipe pequena se baixa reputação)
+      if (f1Seasons === 0) {
+        if (team.prestige < 0.45 && rep < 55 && !(p.academy && p.academy.active && p.academy.f1Teams.includes(team.id))) {
+          return -Math.round((600000 + (55 - rep) * 25000) / 50000) * 50000;
+        }
+        const rookieSal = (450000 + Math.max(0, ger - 78) * 65000) * (0.65 + 0.65 * team.prestige);
+        return Math.round(cl(rookieSal, 400000, 1800000) / 25000) * 25000;
+      }
+
+      // 2º ou 3º ano na F1: crescimento gradual (US$ 1,2 mi a US$ 6,5 mi)
+      if (f1Seasons <= 2 && f1Titles === 0 && f1Wins < 3) {
+        const midSal = (1100000 + Math.max(0, ger - 80) * 220000 + f1Wins * 450000) * (0.65 + 0.65 * team.prestige);
+        return Math.round(cl(midSal, 900000, 6500000) / 50000) * 50000;
+      }
+
+      // Piloto consolidado, vencedor ou campeão mundial: contratos multimilionários reais (US$ 7 mi a US$ 42 mi)
+      const starBase = 4500000 + Math.pow(Math.max(0, ger - 82), 2) * 145000 + f1Wins * 280000 + f1Titles * 3500000;
+      return Math.round(cl(starBase * (0.6 + 0.65 * team.prestige), 5000000, 42000000) / 100000) * 100000;
     }
-    const price = c.cost * (.6 + .8 * team.prestige), merit = cl((ger - (c.mean + 4)) / 14, -.5, 1.4);
-    return r1k(merit < 1 ? -price * (1 - merit) : c.cost * (merit - 1));
+
+    // Categorias de base (Kart a F2): piloto paga pelo assento, ou ganha vaga gratuita / bolsa modesta se muito acima da média
+    const price = c.cost * (.6 + .8 * team.prestige);
+    const merit = cl((ger - (c.mean + 4)) / 14, -.5, 1.35);
+    if (merit < 1) return r1k(-price * (1 - merit));
+    // Mesmo os maiores talentos da F2/F3 ganham no máximo assento pago + bolsa modesta (US$ 15k a US$ 160k)
+    const stipendCap = c.level >= 6 ? 160000 : c.level >= 4 ? 60000 : 15000;
+    return r1k(Math.min(stipendCap, c.cost * 0.08 * (merit - 1)));
   };
 
   Con.defaultTerms = function (s, catId, team, role) {
-    const sal = Con.valueFor(s, catId, team, role), ref = Math.max(Math.abs(sal), C[catId].cost * .5, 50000);
-    const rr = n => Math.round(n / 5000) * 5000;
+    const sal = Con.valueFor(s, catId, team, role);
+    const isF1 = catId === 'f1';
+    const f1Races = (s.player.f1 && s.player.f1.races) || 0;
+    const isRookieF1 = isF1 && f1Races < 18;
+    const ref = isF1
+      ? (isRookieF1 ? Math.max(Math.abs(sal), 600000) : Math.max(Math.abs(sal), 2500000))
+      : Math.max(Math.abs(sal), C[catId].cost * .35, 25000);
+    const rr = n => Math.max(1000, Math.round(n / 5000) * 5000);
+
     if (role === 'reserve') {
-      return { years: 1, salary: sal, bTitle: 0, bWin: rr(ref * .2), bPodium: rr(ref * .1), bPoint: rr(ref * .02), exit: true, option: false, img: 0 };
+      return { years: 1, salary: sal, bTitle: 0, bWin: rr(ref * .15), bPodium: rr(ref * .08), bPoint: rr(ref * .015), exit: true, option: false, img: 0 };
     }
-    return { years: catId === 'f1' ? R.int(1, 3) : R.int(1, 2), salary: sal, bTitle: rr(ref * .4), bWin: rr(ref * .03), bPodium: rr(ref * .015), bPoint: rr(ref * .002), exit: false, option: false, img: 0 };
+    if (isRookieF1) {
+      return { years: R.int(1, 2), salary: sal, bTitle: rr(ref * .8), bWin: rr(ref * .18), bPodium: rr(ref * .07), bPoint: rr(ref * .01), exit: false, option: true, img: 0 };
+    }
+    return { years: isF1 ? R.int(1, 3) : R.int(1, 2), salary: sal, bTitle: rr(ref * .35), bWin: rr(ref * .04), bPodium: rr(ref * .018), bPoint: rr(ref * .003), exit: false, option: false, img: 0 };
   };
 
   Con.termsValue = function (t, ref) {
@@ -41,26 +116,59 @@
       a += cl(diff * 1.5, -8, 12);
     }
     if (p.contract && p.contract.role === 'reserve') a += 10;
+    if (Con.ensureAcademy(p)) a += 8;
     if (p.fired) a -= 20;
     return cl(a, 5, 98);
   };
 
-  Con.canAfford = (s, o) => o.terms.salary >= 0 || s.player.money + Game.systems.economy.nextSupport(s) >= -o.terms.salary;
+  /* Calcula quanto o jogador realmente precisa desembolsar considerando cobertura da Academia + apoio familiar. */
+  Con.effectiveCost = function (s, rawSalary) {
+    if (rawSalary >= 0) return 0;
+    const cost = -rawSalary;
+    const acad = Con.ensureAcademy(s.player);
+    const acadCover = acad ? Math.round(cost * (acad.coverage || 0)) : 0;
+    return Math.max(0, cost - acadCover);
+  };
+
+  Con.canAfford = (s, o) => o.terms.salary >= 0 || s.player.money + Game.systems.economy.nextSupport(s) >= Con.effectiveCost(s, o.terms.salary);
 
   Con.generateOffers = function (s) {
     const p = s.player, cur = C[p.catId], y = s.year, age = y - p.birth, forced = !!p.forcedUp;
     const attract = Con.attract(s), rep = p.reputation != null ? p.reputation : 45, offers = [];
     const sponsorPower = U.sum((p.sponsors || []).map(x => x.pay || 0));
+    const acad = Con.ensureAcademy(p);
+    const extraordinary = Con.isExtraordinary(s);
+
     s.offers = [];
     if (p.contract && !forced && !p.contract.exit) return;
     if (Game.systems.world.syncF1Teams) Game.systems.world.syncF1Teams(s, false);
 
-    const slEligible = SL.status(p, y).eligible;
+    // Exceção de prodígio: piloto extraordinário aos 17 anos com 28+ pts SL recebe superlicença especial (estilo Verstappen/Antonelli)
+    if (age === 17 && extraordinary && SL.status(p, y).total >= 28 && Con.ger(s) >= 82) {
+      if (!p.flags.f1Waiver) {
+        p.flags.f1Waiver = true;
+        Game.systems.news.both('EXCEÇÃO DA FIA: Por desempenho extraordinário na base, você recebeu autorização especial para estrear na F1 aos 17 anos!', 'good');
+      }
+    }
+
+    const slStatus = SL.status(p, y);
+    const slEligible = slStatus.eligible || (extraordinary && age >= 17 && slStatus.total >= 30 && Con.ger(s) >= 82);
+
     const cats = [];
     if (!forced && !p.contract) cats.push(cur.id);
     D.nextOptions[cur.id].forEach(n => {
       const cn = C[n];
-      if (age < cn.minAge) return;
+      const skipLevels = cn.level - cur.level;
+
+      // Saltos de categoria exigem carreira extraordinária!
+      if (n === 'f1' && cur.id !== 'f2') {
+        if (!extraordinary || !slEligible) return;
+        if (cur.id === 'frec' && Con.ger(s) < 85) return;
+      } else if (skipLevels >= 2 && n !== 'f1') {
+        if (!extraordinary || Con.ger(s) < cn.mean - 4) return;
+      }
+
+      if (age < cn.minAge && !(n === 'f1' && slEligible)) return;
       if (n === 'f1' && !slEligible) return;
       if (forced || p.contract || attract >= 26 + cn.level * 2) cats.push(n);
     });
@@ -69,34 +177,54 @@
       const c = C[catId], diff = c.level - cur.level;
       let teams = Game.systems.world.activeTeams(s, catId);
 
-      // Na F1, equipes de ponta exigem Reputação no Paddock alta; equipes menores aceitam pay drivers com patrocínio forte
       if (catId === 'f1') {
         teams = teams.filter(t => {
-          if (t.prestige >= 0.85) return rep >= 70 && Con.ger(s) >= 84;
-          if (t.prestige >= 0.55) return rep >= 55 || sponsorPower >= 4000000;
+          const isAcadTeam = acad && (acad.f1Teams || []).includes(t.id);
+          if (isAcadTeam) return true; // Academia abre portas na sua equipe afiliada!
+          if (t.prestige >= 0.85) return rep >= 72 && Con.ger(s) >= 84;
+          if (t.prestige >= 0.55) return rep >= 56 || sponsorPower >= 4000000;
           return true;
         });
       }
 
       const target = cl((attract - 10 * Math.max(0, diff)) / 100, .05, 1);
-      const pick = R.shuffle(teams).map(t => ({ t, w: Math.exp(-Math.pow(t.prestige - target, 2) / (2 * .22 * .22)) }))
-        .sort((a, b) => b.w - a.w + R.normal(0, .15))
-        .slice(0, catId === cur.id ? 3 : 2);
+      let sorted = R.shuffle(teams).map(t => {
+        const isAcadTeam = (catId === 'f1' && acad && (acad.f1Teams || []).includes(t.id)) ? 0.5 : 0;
+        return { t, w: Math.exp(-Math.pow(t.prestige - target, 2) / (2 * .22 * .22)) + isAcadTeam };
+      }).sort((a, b) => b.w - a.w + R.normal(0, .12));
+
+      const pick = sorted.slice(0, catId === cur.id ? 3 : 2);
 
       pick.forEach(x => {
         if (catId === 'f1' && cur.id === 'f1' && attract < 18 && R.chance(.6)) return;
         const terms = Con.defaultTerms(s, catId, x.t, 'main');
-        // Equipes menores de F1 podem pedir aporte de patrocinador se a reputação for baixa
-        if (catId === 'f1' && x.t.prestige < 0.5 && rep < 52 && sponsorPower >= 2500000) {
-          terms.salary = -Math.min(2000000, Math.round(sponsorPower * 0.4 / 10000) * 10000);
-        }
-        offers.push({ id: U.uid('o'), teamId: x.t.id, catId, teamName: x.t.name, car: Math.round(x.t.car), terms, base: Object.assign({}, terms), tried: false, role: 'main' });
+        const isSkip = diff >= 2;
+        const isAcadTeam = catId === 'f1' && acad && (acad.f1Teams || []).includes(x.t.id);
+        let note = null;
+        if (isSkip && catId === 'f1') note = `Salto direto (${cur.short} → F1)`;
+        else if (isSkip) note = `Promoção acelerada (${cur.short} → ${c.short})`;
+        else if (isAcadTeam) note = `Via ${acad.name}`;
+
+        offers.push({
+          id: U.uid('o'),
+          teamId: x.t.id,
+          catId,
+          teamName: x.t.name,
+          car: Math.round(x.t.car),
+          terms,
+          base: Object.assign({}, terms),
+          tried: false,
+          role: 'main',
+          note
+        });
       });
     });
 
-    // Ofertas de Piloto Reserva na F1 para quem já tem Superlicença (vindo da F2 ou sem vaga titular na F1)
-    if (slEligible && age >= cfg_f1MinAge(y) && (cur.id === 'f2' || cur.id === 'f1')) {
-      const f1Teams = R.shuffle(Game.systems.world.activeTeams(s, 'f1')).slice(0, 2);
+    // Ofertas de Piloto Reserva na F1
+    if (slEligible && (cur.id === 'f2' || cur.id === 'f3' || cur.id === 'f1')) {
+      const f1Pool = Game.systems.world.activeTeams(s, 'f1');
+      const preferred = acad ? f1Pool.filter(t => (acad.f1Teams || []).includes(t.id)) : [];
+      const f1Teams = (preferred.length ? preferred : R.shuffle(f1Pool)).slice(0, 2);
       f1Teams.forEach(t => {
         const terms = Con.defaultTerms(s, 'f1', t, 'reserve');
         offers.push({
@@ -106,14 +234,6 @@
       });
     }
 
-    // academia: jovens de bom nível recebem convite com custos pagos
-    if (age <= 17 && cur.level >= 2 && cur.level <= 5 && Con.ger(s) >= cur.mean + 10 && R.chance(p.flags.academy ? .6 : .2)) {
-      const catId = cur.level >= 4 ? cur.id : D.nextOptions[cur.id].slice(-1)[0], teams = Game.systems.world.activeTeams(s, catId);
-      const t = teams.slice().sort((a, b) => b.prestige - a.prestige)[0];
-      const terms = Con.defaultTerms(s, catId, t, 'main'); terms.salary = 0; terms.years = 2; terms.bTitle = terms.bWin = terms.bPodium = terms.bPoint = 0;
-      offers.push({ id: U.uid('o'), teamId: t.id, catId, teamName: t.name, car: Math.round(t.car), terms, base: Object.assign({}, terms), tried: true, academy: R.pick(D.academies), role: 'main' });
-    }
-
     s.fallbackCat = cats[0] || cur.id;
     s.offers = offers.sort((a, b) => {
       const la = C[a.catId].level - (a.role === 'reserve' ? 0.4 : 0);
@@ -121,9 +241,189 @@
       return lb - la;
     });
     Con.ensureFallback(s);
+    Con.genAcademyOffers(s);
   };
 
-  function cfg_f1MinAge() { return Game.config.f1MinAge || 18; }
+  /* Gera ofertas negociáveis de Academia de Pilotos (Red Bull Junior, Ferrari Academy, Mercedes Junior, etc.). */
+  Con.genAcademyOffers = function (s, forceAdd) {
+    const p = s.player, cur = C[p.catId], y = s.year, age = y - p.birth;
+    const acad = Con.ensureAcademy(p);
+    if (!s.academyOffers) s.academyOffers = [];
+
+    // Se já pertence a uma academia ativa, não gera novas ofertas (a menos que esteja no último ano e receba renovação)
+    if (acad && acad.years > 1) {
+      s.academyOffers = [];
+      return;
+    }
+
+    if (cur.level < 2 || cur.level > 7 || age > 20) {
+      if (!forceAdd) s.academyOffers = [];
+      return;
+    }
+
+    const ger = Con.ger(s);
+    const qualified = forceAdd || ger >= cur.mean + 4 || (p.lastSeason && p.lastSeason.pos <= 3);
+    if (!qualified) {
+      s.academyOffers = [];
+      return;
+    }
+
+    const pool = (D.academies || []).filter(a => !acad || a.id !== acad.id);
+    const count = forceAdd ? 1 : (ger >= cur.mean + 8 ? 2 : 1);
+    const picked = R.shuffle(pool).slice(0, count);
+
+    const makeOffer = meta => {
+      const coverage = ger >= cur.mean + 9 ? 1.0 : ger >= cur.mean + 6 ? 0.85 : 0.70;
+      const stipend = cur.level >= 6 ? 60000 : cur.level >= 4 ? 30000 : 15000;
+      const tests = cur.level >= 5 ? 2 : 1;
+      const terms = {
+        years: 3,
+        coverage,
+        stipend,
+        f1TestsPerYear: tests,
+        mediaObligations: 2
+      };
+      return {
+        id: U.uid('ac'),
+        acadId: meta.id,
+        name: meta.name,
+        f1Teams: meta.f1Teams || [],
+        color: meta.color || '#f03a3a',
+        terms,
+        base: Object.assign({}, terms),
+        tried: false
+      };
+    };
+
+    if (forceAdd) {
+      if (picked[0] && !s.academyOffers.some(o => o.acadId === picked[0].id)) {
+        s.academyOffers.push(makeOffer(picked[0]));
+      }
+    } else {
+      s.academyOffers = picked.map(makeOffer);
+    }
+  };
+
+  /* Chance de a Academia aceitar os termos negociados pelo piloto. */
+  Con.academyChance = function (s, offer, nt) {
+    const b = offer.base;
+    const covDiff = (nt.coverage - b.coverage) * 1.4;
+    const stipDiff = (nt.stipend - b.stipend) / 100000;
+    const testDiff = (nt.f1TestsPerYear - b.f1TestsPerYear) * 0.22;
+    const mediaHelp = (nt.mediaObligations - b.mediaObligations) * 0.14;
+    const yearHelp = (nt.years - b.years) * 0.05;
+    const ger = Con.ger(s), cur = C[s.player.catId];
+    const talentBonus = Math.max(0, (ger - cur.mean) * 0.02) + (s.player.agent ? 0.10 : 0);
+    const demand = covDiff + stipDiff + testDiff - mediaHelp - yearHelp;
+    return cl(0.85 - demand + talentBonus, 0.08, 0.95);
+  };
+
+  Con.negotiateAcademy = function (s, offer, nt) {
+    const prob = Con.academyChance(s, offer, nt);
+    offer.tried = true;
+    if (R.chance(prob)) {
+      offer.terms = Object.assign({}, nt);
+      return { ok: true, msg: `${offer.name} aceitou os termos do programa!` };
+    }
+    if (R.chance(0.35)) {
+      s.academyOffers = (s.academyOffers || []).filter(o => o.id !== offer.id);
+      return { ok: false, withdrawn: true, msg: `${offer.name} encerrou as conversas e retirou o convite.` };
+    }
+    offer.terms = Object.assign({}, offer.base);
+    return { ok: false, msg: `${offer.name} recusou a contraproposta e manteve a oferta base.` };
+  };
+
+  Con.acceptAcademy = function (s, offer) {
+    const p = s.player;
+    const t = offer.terms;
+    p.academy = {
+      id: offer.acadId,
+      name: offer.name,
+      f1Teams: offer.f1Teams || [],
+      color: offer.color || '#f03a3a',
+      active: true,
+      years: t.years,
+      yearsTotal: t.years,
+      coverage: t.coverage,
+      stipend: t.stipend,
+      f1TestsPerYear: t.f1TestsPerYear,
+      f1TestsLeft: t.f1TestsPerYear,
+      mediaObligations: t.mediaObligations,
+      mediaDone: 0,
+      satisfaction: 75
+    };
+    s.academyOffers = [];
+    Game.systems.news.both(`Contrato assinado com a ${offer.name} (${t.years} anos, ${Math.round(t.coverage * 100)}% dos custos cobertos)!`, 'good');
+    return { ok: true, msg: `Você agora é piloto oficial da ${offer.name}!` };
+  };
+
+  /* Executa um teste privado em carro de F1 (TPC) pago pela Academia. */
+  Con.runAcademyF1Test = function (s) {
+    const p = s.player, acad = Con.ensureAcademy(p);
+    if (!acad) return { ok: false, msg: 'Você não pertence a uma academia.' };
+    if ((acad.f1TestsLeft || 0) <= 0) return { ok: false, msg: 'Sem sessões de teste de F1 restantes neste ano.' };
+    if (p.phys < 25) return { ok: false, msg: 'Físico muito desgastado para testar um F1.' };
+
+    acad.f1TestsLeft--;
+    p.phys = cl(p.phys - 6, 0, 100);
+    p.train = Math.min(Game.config.trainCap + 2, (p.train || 0) + 0.55);
+    const growAttr = R.chance(0.5) ? 'RIT' : 'ATE';
+    A.growCap(p, growAttr, 0.35);
+    p.reputation = cl((p.reputation || 45) + 3, 0, 100);
+    acad.satisfaction = cl(acad.satisfaction + 4, 0, 100);
+
+    // Pontos de superlicença por testes oficiais/TPC (máximo 10 pontos por ano)
+    const yearTestPts = p.superPoints.filter(x => x.year === s.year && x.catId === 'f1_test').reduce((a, b) => a + b.pts, 0);
+    let slMsg = '';
+    if (yearTestPts < 10) {
+      p.superPoints.push({ year: s.year, catId: 'f1_test', pts: 2 });
+      slMsg = ' · +2 pts superlicença';
+    }
+
+    const msg = `Teste privado de F1 (${acad.name}): telemetria excelente (+${growAttr} teto, +Reputação${slMsg}).`;
+    Game.systems.news.add(msg, 'good');
+    Game.systems.career.save();
+    return { ok: true, msg };
+  };
+
+  /* Cumpre campanha publicitária / evento de patrocinadores da Academia. */
+  Con.runAcademyAd = function (s) {
+    const p = s.player, acad = Con.ensureAcademy(p);
+    if (!acad) return { ok: false, msg: 'Você não pertence a uma academia.' };
+    if ((acad.mediaDone || 0) >= (acad.mediaObligations || 1)) return { ok: false, msg: 'Compromissos de mídia do ano já cumpridos.' };
+
+    acad.mediaDone = (acad.mediaDone || 0) + 1;
+    const fee = Math.round((15000 + C[p.catId].level * 8000) * (1 + p.popularity / 100) / 1000) * 1000;
+    p.money += fee;
+    p.popularity = cl((p.popularity || 10) + 4, 0, 100);
+    p.mental = cl(p.mental - 3, 0, 100);
+    acad.satisfaction = cl(acad.satisfaction + 6, 0, 100);
+
+    const msg = `Campanha da ${acad.name} gravada! Cachê de ${U.fmtMoney(fee)} e +4 Popularidade.`;
+    Game.systems.news.add(msg, 'good');
+    Game.systems.career.save();
+    return { ok: true, msg };
+  };
+
+  /* Ajusta a confiança da Academia e demite o piloto se fizer muita besteira ou tiver péssimo desempenho. */
+  Con.adjustAcademySat = function (s, delta, reason) {
+    const p = s.player, acad = Con.ensureAcademy(p);
+    if (!acad || !delta) return;
+    acad.satisfaction = cl((acad.satisfaction || 70) + delta, 0, 100);
+    if (acad.satisfaction <= 15) {
+      Con.fireFromAcademy(s, reason || 'resultados e comportamento incompatíveis com o programa');
+    }
+  };
+
+  Con.fireFromAcademy = function (s, reason) {
+    const p = s.player, acad = Con.ensureAcademy(p);
+    if (!acad) return;
+    const name = acad.name;
+    p.academy = null;
+    p.reputation = cl((p.reputation || 45) - 8, 0, 100);
+    Game.systems.news.both(`DEMITIDO DA ACADEMIA: A ${name} rompeu seu contrato (${reason})! Você perdeu a bolsa e a cobertura de custos.`, 'bad');
+    if (Game.ui && Game.ui.toast) Game.ui.toast(`Você foi demitido da ${name}!`);
+  };
 
   Con.ensureFallback = function (s) {
     const p = s.player;
@@ -133,7 +433,13 @@
     const catId = s.fallbackCat || p.catId, t = Game.systems.world.activeTeams(s, catId).slice().sort((a, b) => a.prestige - b.prestige)[0];
     const terms = Con.defaultTerms(s, catId, t, 'main');
     const afford = p.money + Game.systems.economy.nextSupport(s);
-    if (terms.salary < 0 && -terms.salary > afford) terms.salary = -Math.max(0, Math.floor(afford));
+    const eff = Con.effectiveCost(s, terms.salary);
+    if (terms.salary < 0 && eff > afford) {
+      const acad = Con.ensureAcademy(p);
+      const cov = acad ? (acad.coverage || 0) : 0;
+      const maxGross = cov < 1 ? Math.floor(afford / (1 - cov)) : Math.abs(terms.salary);
+      terms.salary = -Math.max(0, maxGross);
+    }
     s.offers.push({ id: U.uid('o'), teamId: t.id, catId, teamName: t.name, car: Math.round(t.car), terms, base: Object.assign({}, terms), tried: true, note: 'Vaga de reserva', role: 'main' });
   };
 
@@ -164,7 +470,6 @@
       startYear: s.year,
       role: offer.role || 'main'
     }, offer.terms);
-    if (offer.academy) { p.academy = offer.academy; Game.systems.news.both(`Você entrou na ${offer.academy}.`, 'good'); }
     s.offers = [];
     const roleTxt = offer.role === 'reserve' ? ' como Piloto Reserva' : '';
     Game.systems.news.add(`Contrato assinado com a ${offer.teamName} (${C[offer.catId].short})${roleTxt}.`, 'good');
