@@ -183,6 +183,11 @@
 
       if (cat.id === 'f1' && !s.flags.wasF1) {
         s.flags.wasF1 = true;
+        if (p.academy && p.academy.name) {
+          S.news.both(`Formado na ${p.academy.name}! Com a estreia na F1, você concluiu o programa de formação.`, 'good');
+          p.academy = null;
+        }
+        s.academyOffers = [];
         S.news.both(`Estreia na F1 em ${cal.circuit.name}!`, 'good');
         if (s.year - p.birth <= 18) s.flags.prodigy = true;
       }
@@ -222,7 +227,7 @@
   /* Verifica se a próxima etapa em categorias de base (Kart, F4, FREC, F3) é um momento-chave. */
   Car.isKeyJuniorRound = function (s) {
     const se = s.season, cat = C[se.catId];
-    if (!se || se.finished || cat.level >= 8) return true;
+    if (!se || se.finished) return true;
     // Parada obrigatória no meio da temporada para escolher foco de desenvolvimento do carro
     if (se.round === Math.floor(se.cal.length / 2)) return true;
 
@@ -248,7 +253,7 @@
     if (!se || se.finished || p.noSeat) return null;
 
     const isRes = Car.isReserve(p);
-    if (cat.level >= 8 && !isRes) return null;
+    if (se.round >= se.cal.length - 1 && !isRes) return null;
 
     const fromRound = se.round + 1;
     const startPts = p.season.points, startWins = p.season.wins, startPod = p.season.podiums;

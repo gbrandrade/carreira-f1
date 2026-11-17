@@ -1,4 +1,4 @@
-/* Contratos: equipe de corrida, Academia de Pilotos (negociação e gestão) e superlicença. */
+/* Contratos: equipe de corrida, Academia de Pilotos (negociação e prospecção a qualquer momento) e superlicença. */
 (function () {
   const ui = Game.ui, h = ui.h, U = Game.utils, C = Game.data.categories, S = Game.systems, M = U.fmtMoney;
   const salLabel = t => t.salary >= 0 ? 'Salário/ano' : 'Você paga/ano';
@@ -153,8 +153,19 @@
 
   function academySection(s) {
     const p = s.player;
+    const inF1 = p.catId === 'f1' || !!(s.flags && s.flags.wasF1);
     const acad = S.contracts.ensureAcademy(p);
     const aOffers = s.academyOffers || [];
+
+    if (inF1) {
+      return h('div', { class: 'col', style: { borderTop: '1px solid var(--line)', paddingTop: '.55rem', gap: '.25rem' } },
+        h('div', { class: 'row between' },
+          h('span', { class: 'pt' }, 'Academia de pilotos'),
+          ui.badge('FÓRMULA 1', 'ok')
+        ),
+        h('div', { class: 'tiny dim' }, 'Você já é piloto de Fórmula 1 — os programas de formação júnior e testes TPC são exclusivos das categorias de base.')
+      );
+    }
 
     if (acad) {
       return h('div', { class: 'col', style: { borderTop: '1px solid var(--line)', paddingTop: '.55rem', gap: '.4rem' } },
@@ -170,16 +181,22 @@
           h('span', { class: 'tiny mono mut' }, `Cobre ${Math.round(acad.coverage * 100)}% · ${M(acad.stipend)}/ano`)
         ),
         ui.bar('Confiança', acad.satisfaction),
-        h('div', { class: 'tiny mut' }, `Testes F1 (TPC): ${acad.f1TestsLeft}/${acad.f1TestsPerYear} · Mídia: ${acad.mediaDone}/${acad.mediaObligations} · Cuidado: punições e maus resultados causam demissão.`)
+        h('div', { class: 'tiny mut' }, `Testes F1 (TPC): ${acad.f1TestsLeft}/${acad.f1TestsPerYear} · Mídia: ${acad.mediaDone}/${acad.mediaObligations} · Punições e maus resultados causam demissão.`)
       );
     }
+
+    const seekBtn = ui.btn('Buscar academia', () => {
+      const r = S.contracts.seekAcademy(s);
+      if (r.msg) ui.toast(r.msg);
+      ui.refresh();
+    }, 'sm', false, 'users');
 
     if (aOffers.length) {
       const off = aOffers[0];
       const t = off.terms;
       return h('div', { class: 'col', style: { borderTop: '1px solid var(--line)', paddingTop: '.55rem', gap: '.4rem' } },
         h('div', { class: 'row between' },
-          h('span', { class: 'pt' }, 'Convite de Academia'),
+          h('span', { class: 'pt' }, `Convite de Academia (${aOffers.length})`),
           ui.badge('NOVA PROPOSTA', 'acc')
         ),
         h('div', { class: 'tchip' },
@@ -187,16 +204,20 @@
           h('b', { class: 'small' }, off.name)
         ),
         h('div', { class: 'tiny mut' }, `${t.years} anos · cobre ${Math.round(t.coverage * 100)}% da inscrição + ${M(t.stipend)}/ano + ${t.f1TestsPerYear} teste(s) F1/ano`),
-        h('div', { class: 'row' },
+        h('div', { class: 'row', style: { flexWrap: 'wrap' } },
           ui.btn('Assinar programa', () => { const r = S.contracts.acceptAcademy(s, off); ui.toast(r.msg); ui.refresh(); }, 'primary sm', false, 'check'),
-          ui.btn(off.tried ? 'Negociado' : 'Negociar', () => negotiateAcademyModal(off), 'sm', off.tried, 'swap')
+          ui.btn(off.tried ? 'Negociado' : 'Negociar', () => negotiateAcademyModal(off), 'sm', off.tried, 'swap'),
+          aOffers.length < 3 ? seekBtn : null
         )
       );
     }
 
-    return h('div', { class: 'col', style: { borderTop: '1px solid var(--line)', paddingTop: '.55rem', gap: '.25rem' } },
-      h('span', { class: 'pt' }, 'Academia de pilotos'),
-      h('div', { class: 'tiny dim' }, 'Destaque-se nas categorias de base para receber proposta de uma academia oficial da F1.')
+    return h('div', { class: 'col', style: { borderTop: '1px solid var(--line)', paddingTop: '.55rem', gap: '.35rem' } },
+      h('div', { class: 'row between' },
+        h('span', { class: 'pt' }, 'Academia de pilotos'),
+        seekBtn
+      ),
+      h('div', { class: 'tiny dim' }, 'Você pode procurar uma academia a qualquer momento da base ou aguardar um convite após bons resultados.')
     );
   }
 
@@ -218,7 +239,7 @@
       );
 
       let right;
-      if (s.phase === 'season') right = ui.panel({ title: 'Ofertas', cls: 'grow' }, h('div', { class: 'empty' }, ui.plate('clock', null, true), h('div', null, 'Novas ofertas só aparecem na entressafra.')));
+      if (s.phase === 'season') right = ui.panel({ title: 'Ofertas', cls: 'grow' }, h('div', { class: 'empty' }, ui.plate('clock', null, true), h('div', null, 'Novas ofertas de equipe só aparecem na entressafra.')));
       else if (!s.offers.length) right = ui.panel({ title: 'Ofertas', cls: 'grow' }, h('div', { class: 'empty' }, ui.plate('lock', null, true), h('div', null, c ? 'Seu contrato continua válido. Sem cláusula de saída, não há ofertas de outras equipes.' : 'Nenhuma oferta disponível.')));
       else right = ui.panel({ title: `Ofertas para ${s.year}`, right: p.forcedUp ? ui.badge('você precisa subir de categoria', 'warn') : null }, ui.paged('offers', s.offers, 3, items => items.map(o => offerCard(o, s))));
 

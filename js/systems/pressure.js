@@ -4,7 +4,18 @@
   const P = Game.systems.pressure = {};
   const LABEL = { money: 'Dinheiro', rep: 'Reputação', pop: 'Popularidade', family: 'Família', mental: 'Mente', phys: 'Físico', train: 'Evolução', acadRep: 'Academia' };
 
-  P.mult = (s, k) => s.player.traits.reduce((m, id) => { const t = D.traits.find(x => x.id === id); return m * ((t && t.mod[k]) || 1); }, 1);
+  P.mult = (s, k) => {
+    let m = s.player.traits.reduce((acc, id) => { const t = D.traits.find(x => x.id === id); return acc * ((t && t.mod[k]) || 1); }, 1);
+    const ag = Game.systems.contracts && Game.systems.contracts.ensureAgent(s.player);
+    if (ag && ag.mod) {
+      if (k === 'mediaGain' && ag.mod.mediaGain) m *= ag.mod.mediaGain;
+      if (k === 'repGain' && ag.mod.repGain) m *= ag.mod.repGain;
+      if (k === 'dev' && ag.mod.dev) m *= ag.mod.dev;
+      if (k === 'train' && ag.mod.train) m *= ag.mod.train;
+      if ((k === 'pressureLoss' || k === 'mentalDrain') && ag.mod.drainMult) m *= ag.mod.drainMult;
+    }
+    return m;
+  };
 
   P.ensure = function (p) {
     if (p.reputation == null) p.reputation = 45;
@@ -26,7 +37,7 @@
       } else if (k === 'media' || k === 'fans' || k === 'pop') {
         popDelta += v;
       } else if (k === 'rep') {
-        v = v < 0 ? v * P.mult(s, 'pressureLoss') : v;
+        v = v < 0 ? v * P.mult(s, 'pressureLoss') : v * P.mult(s, 'repGain');
         v = Math.round(v);
         p.reputation = cl(p.reputation + v, 0, 100);
         if (v) parts.push(`${LABEL.rep} ${v > 0 ? '+' : ''}${v}`);
@@ -130,6 +141,18 @@
       const rounds = R.int(1, 3);
       p.injury = rounds; p.phys = cl(p.phys - 10, 0, 100);
       Game.systems.news.both(`Acidente em ${week.circuit.name}: lesão, ${rounds} etapa(s) fora.`, 'bad');
+    }
+    // Academias de pilotos podem procurar o jogador em qualquer momento da carreira antes da F1
+    const catLv = C[p.catId].level;
+    if (catLv >= 1 && catLv <= 7 && !(s.flags && s.flags.wasF1) && Game.systems.contracts) {
+      const hasAcad = Game.systems.contracts.ensureAcademy(p);
+      const pendingOffers = (s.academyOffers || []).length;
+      if (!hasAcad && pendingOffers === 0 && !me.dnf && me.pos <= 3) {
+        const scoutProb = 0.14 + Game.systems.contracts.agentMod(p, 'academyBonus', 0);
+        if (R.chance(scoutProb)) {
+          Game.systems.contracts.genAcademyOffers(s, true);
+        }
+      }
     }
     P.regen(s);
   };

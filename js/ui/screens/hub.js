@@ -53,7 +53,7 @@
         sub = `Etapa ${n.idx + 1} de ${se.cal.length} · ${U.monthOfWeek(n.week)}${n.sprint ? ' · sprint' : ''}`;
         art = ui.track(n.circuit.id);
         if (isRes) rightTag = se.reserveCallUp ? ui.badge('convocado!', 'ok') : ui.badge('reserva', 'info');
-        else if (cat.level <= 7 && S.career.isKeyJuniorRound(s)) rightTag = ui.badge('momento-chave', 'acc');
+        else if (S.career.isKeyJuniorRound(s)) rightTag = ui.badge('momento-chave', 'acc');
         info = h('div', { class: 'row' }, ui.badge(n.circuit.rain + '% chuva', n.circuit.rain >= 30 ? 'warn' : ''), ui.ccode(n.circuit.country));
         btn = ui.btn(isRes && !se.reserveCallUp ? 'Ir para fim de semana' : 'Próxima etapa', () => ui.go('race'), 'primary lg', false, 'flag');
       }

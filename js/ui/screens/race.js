@@ -59,7 +59,7 @@
     },
     pre(s) {
       const p = s.player, se = s.season, cal = se.cal[se.round], cat = C[se.catId], r = ui.race, inj = p.injury > 0, cc = cal.circuit;
-      const isJunior = cat.level <= 7;
+      const isJunior = true;
       const isRes = S.career.isReserve(p);
       const isCallUp = isRes && !!se.reserveCallUp;
       const wetLikely = cc.rain >= 35;

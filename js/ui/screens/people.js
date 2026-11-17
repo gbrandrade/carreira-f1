@@ -1,6 +1,6 @@
-/* Pessoas e mídia: agente, engenheiro, duelo com companheiro (H2H), Academia de Pilotos e desenvolvimento. */
+/* Pessoas e mídia: escolha de Agentes especializados, engenheiro, duelo H2H, Academia e desenvolvimento. */
 (function () {
-  const ui = Game.ui, h = ui.h, D = Game.data, S = Game.systems;
+  const ui = Game.ui, h = ui.h, D = Game.data, S = Game.systems, C = D.categories;
   const FOCUS = [['Aerodinâmica', 'downforce e eficiência'], ['Motor', 'potência e entrega'], ['Confiabilidade', 'menos quebras'], ['Chassi e pneus', 'tração e desgaste'], ['Ritmo de classificação', 'volta rápida']];
 
   function interview(s) {
@@ -10,12 +10,73 @@
     } })) });
   }
 
+  function openAgentPicker(s) {
+    const p = s.player;
+    const curLv = C[p.catId].level;
+    const curAg = S.contracts.ensureAgent(p);
+    const catNameForLv = lv => {
+      const found = Object.values(C).find(c => c.level === lv);
+      return found ? found.short : 'base';
+    };
+
+    const body = h('div', { class: 'col', style: { gap: '.55rem' } },
+      h('div', { class: 'small mut' }, 'Cada agente cobra uma comissão anual sobre seus salários e bônus, mas oferece uma vantagem estratégica diferente na carreira.'),
+      (D.agents || []).map(ag => {
+        const isCurrent = curAg && curAg.id === ag.id;
+        const locked = curLv < (ag.minLv || 0);
+        return h('div', { class: 'tile', style: { gap: '.3rem', opacity: locked ? .55 : 1, borderColor: isCurrent ? 'var(--accent-line)' : null } },
+          h('div', { class: 'row between' },
+            h('div', { class: 'row gap-s' },
+              h('b', null, ag.name),
+              ui.badge(ag.role, 'info')
+            ),
+            h('div', { class: 'row gap-s' },
+              ui.badge(`Comissão ${Math.round(ag.cut * 100)}%`, 'warn'),
+              locked
+                ? ui.badge(`Nível ${catNameForLv(ag.minLv)}`)
+                : isCurrent
+                  ? ui.badge('Atual', 'ok')
+                  : ui.btn('Contratar', () => {
+                      p.agent = ag.id;
+                      S.news.add(`Você contratou ${ag.name} (${ag.role}) como seu agente.`, 'good');
+                      S.career.save();
+                      document.querySelectorAll('.overlay').forEach(o => o.remove());
+                      ui.toast(`Agente contratado: ${ag.name}`);
+                      ui.refresh();
+                    }, 'sm primary')
+            )
+          ),
+          h('div', { class: 'tiny ok' }, `Especialidade: ${ag.perk}`),
+          h('div', { class: 'tiny mut' }, ag.desc)
+        );
+      })
+    );
+
+    const actions = [{ label: 'Fechar' }];
+    if (curAg) {
+      actions.unshift({
+        label: `Dispensar ${curAg.name}`,
+        fn: () => {
+          p.agent = null;
+          S.career.save();
+          ui.toast('Agente dispensado');
+          ui.refresh();
+        }
+      });
+    }
+
+    ui.modal({ title: 'Escolher Agente de Pilotos', body, width: '40rem', actions });
+  }
+
   const person = (name, role, right, extra) => h('div', { class: 'tile', style: { flexDirection: 'row', alignItems: 'center', gap: '.7rem' } }, ui.avatar(name), h('div', { class: 'grow' }, h('b', null, name), h('div', { class: 'tiny mut' }, role), extra || null), right || null);
 
   ui.screens.people = {
     render() {
       const s = Game.state, p = s.player, inSeason = s.phase === 'season' && s.season;
-      const acad = S.contracts.ensureAcademy(p);
+      const inF1 = p.catId === 'f1' || !!(s.flags && s.flags.wasF1);
+      const acad = !inF1 ? S.contracts.ensureAcademy(p) : null;
+      const curAg = S.contracts.ensureAgent(p);
+
       let mate = null;
       if (inSeason) {
         const m = S.world.entries(s, p.catId, false).find(e => e.teamId === p.teamId);
@@ -28,7 +89,12 @@
       const h2h = p.h2h || { qualiW: 0, qualiL: 0, raceW: 0, raceL: 0 };
 
       const people = ui.panel({ title: 'Pessoas e equipe', cls: 'marks', right: inSeason && p.teamRole ? ui.badge(p.teamRole, p.teamRole === '1º Piloto' ? 'ok' : p.teamRole === 'Piloto Reserva' ? 'info' : '') : null },
-        person(p.agent ? 'Seu agente' : 'Sem agente', p.agent ? 'comissão de 10% · melhora as negociações' : 'contrate para negociar melhor', ui.btn(p.agent ? 'Dispensar' : 'Contratar', () => { p.agent = !p.agent; ui.refresh(); }, 'sm ' + (p.agent ? 'ghost' : 'primary'))),
+        person(
+          curAg ? curAg.name : 'Sem agente',
+          curAg ? `${curAg.role} · comissão ${Math.round(curAg.cut * 100)}%` : 'contrate um especialista para negociar e gerenciar sua carreira',
+          ui.btn(curAg ? 'Trocar' : 'Escolher', () => openAgentPicker(s), 'sm ' + (curAg ? '' : 'primary')),
+          curAg ? h('div', { class: 'tiny ok', style: { marginTop: '.15rem' } }, curAg.perk) : null
+        ),
         person('Engenheiro de pista', 'relação com o piloto', null, ui.bar('Relação', p.engineerRel, { auto: false })),
         mate
           ? person(mate.name, 'companheiro de equipe', ui.rate(mate.ger),
@@ -61,7 +127,19 @@
                 }, 'sm', !inSeason || (acad.mediaDone || 0) >= (acad.mediaObligations || 1), 'mic')
               )
             )
-          : null,
+          : (!inF1
+              ? h('div', { class: 'tile', style: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: '.55rem .7rem' } },
+                  h('div', null,
+                    h('b', { class: 'small' }, 'Sem Academia de Pilotos'),
+                    h('div', { class: 'tiny mut' }, 'Busque apoio de uma equipe de F1 na base')
+                  ),
+                  ui.btn('Buscar', () => {
+                    const r = S.contracts.seekAcademy(s);
+                    if (r.msg) ui.toast(r.msg);
+                    ui.refresh();
+                  }, 'sm', false, 'users')
+                )
+              : null),
         h('div', { class: 'grow' }),
         h('div', { class: 'row', style: { flexWrap: 'wrap' } }, p.traits.map(id => ui.badge(D.traits.find(t => t.id === id).name, 'acc')))
       );
@@ -86,7 +164,7 @@
         h('div', { class: 'tiny ' + (half ? 'dim' : 'warn') }, half ? (p.devFocus ? `Foco escolhido: ${p.devFocus}` : 'Escolha o foco até o meio da temporada.') : 'Disponível apenas até a metade da temporada.')
       );
 
-      return h('div', { class: 'screen' }, ui.head('Pessoas e mídia', 'Relações, academia de pilotos e desenvolvimento do carro'), h('div', { class: 'cols3' }, people, media, dev));
+      return h('div', { class: 'screen' }, ui.head('Pessoas e mídia', 'Agentes especializados, relações e desenvolvimento do carro'), h('div', { class: 'cols3' }, people, media, dev));
     }
   };
 })();

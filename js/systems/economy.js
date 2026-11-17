@@ -62,7 +62,10 @@
   // ---- Patrocínios ----
   E.tiersFor = lv => lv <= 2 ? [1] : lv <= 4 ? [1, 2] : lv <= 6 ? [2, 3] : lv === 7 ? [2, 3, 4] : [3, 4];
 
-  E.sponsorBasePay = (s, sp) => Math.round(sp.pay * (.65 + s.player.popularity / 100) * (s.player.traits.includes('carismatico') ? 1.2 : 1) / 1000) * 1000;
+  E.sponsorBasePay = (s, sp) => {
+    const agMult = Game.systems.contracts ? Game.systems.contracts.agentMod(s.player, 'sponsorPay', 1) : 1;
+    return Math.round(sp.pay * (.65 + s.player.popularity / 100) * (s.player.traits.includes('carismatico') ? 1.2 : 1) * agMult / 1000) * 1000;
+  };
 
   E.sponsorPay = (s, spOrOffer) => {
     if (spOrOffer && spOrOffer.pay != null && spOrOffer.id && !spOrOffer.group) return Math.round(spOrOffer.pay);
@@ -161,7 +164,8 @@
     const yearsPenalty = Math.max(0, (nt.years || 1) - 1) * 0.06;
 
     const p = s.player;
-    const leverage = (p.agent ? 0.10 : 0) + (p.traits.includes('carismatico') ? 0.08 : 0) + Math.max(0, (p.popularity - 20) / 250);
+    const agSpo = Game.systems.contracts ? Game.systems.contracts.agentMod(p, 'sponsorChance', 0) : 0;
+    const leverage = agSpo + (p.traits.includes('carismatico') ? 0.08 : 0) + Math.max(0, (p.popularity - 20) / 250);
     const demand = payRatio * 1.35 + bonusRatio * 0.65 + yearsPenalty - goalShift * 0.45;
     return cl(0.88 - demand + leverage, 0.05, 0.95);
   };
@@ -294,7 +298,8 @@
     const res = D.residences.find(x => x.id === p.residence);
     const taxable = Math.max(0, contractInc + U.sum(lines.filter(l => l.label.indexOf('Investimento') < 0 && l.amount > 0 && l.label !== 'Salário e bônus').map(l => l.amount)));
     add(`Impostos (${res.name})`, -taxable * res.tax);
-    if (p.agent) add('Comissão do agente', -contractInc * .10);
+    const agObj = Game.systems.contracts ? Game.systems.contracts.ensureAgent(p) : null;
+    if (agObj && contractInc > 0) add(`Comissão (${agObj.name} · ${Math.round(agObj.cut * 100)}%)`, -contractInc * agObj.cut);
     p.money += income - expense;
     return { lines, net: Math.round(income - expense) };
   };
