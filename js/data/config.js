@@ -6,7 +6,7 @@ Game.config = {
   startAge: 12,
   dataYear: 2026,           // ano em que as notas dos pilotos reais foram medidas
   weights: { EXP: 0.05, RAC: 0.27, ATE: 0.11, RIT: 0.57 },   // fórmula do GER
-  refreshes: 3,             // trocas de carta na roleta
+  refreshes: 5,             // trocas de carta na roleta
   rarity: { ruim: 25, mediano: 35, bom: 25, lendario: 13, prime: 2 },
   f1MinAge: 18,
   frustratedAge: 25,        // sem superlicença até essa idade = carreira frustrada
