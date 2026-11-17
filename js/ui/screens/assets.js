@@ -1,18 +1,42 @@
-/* Patrimônio: bens, investimentos, patrocínios (com negociação de contrato) e residência. */
+/* Patrimônio: bens (com desbloqueio por progressão), investimentos, patrocínios (com negociação) e residência. */
 (function () {
   const ui = Game.ui, h = ui.h, U = Game.utils, D = Game.data, S = Game.systems, E = S.economy, M = U.fmtMoney;
   ui.assetsTab = 'bens';
   const say = r => { if (r.msg) ui.toast(r.msg); ui.refresh(); };
   const TYPE = { Casa: ['house', 'var(--info)'], Carro: ['car', 'var(--warn)'], Iate: ['boat', 'var(--accent)'], Simulador: ['sim', 'var(--ok)'], Equipe: ['users', 'var(--gold)'] };
 
+  const catNameForLv = lv => {
+    const found = Object.values(D.categories).find(c => c.level === lv);
+    return found ? found.short : 'categorias superiores';
+  };
+
   function bens(s) {
+    const curLv = D.categories[s.player.catId].level;
     return ui.paged('assets', D.assets, 6, items => [h('div', { class: 'tiles' }, items.map(d => {
       const o = E.owned(s, d.id), [ic, col] = TYPE[d.type];
-      return h('div', { class: 'tile' }, h('div', { class: 'row between' }, ui.plate(ic, col), o && !d.staff ? h('span', { class: 'lvdots' }, [1, 2, 3].map(i => h('i', { class: i <= o.lv ? 'on' : '' }))) : o ? ui.badge('ativo', 'ok') : null),
-        h('div', null, h('h4', null, d.name), h('div', { class: 'tiny mut' }, d.desc)), h('div', { class: 'tiny mono dim' }, d.staff ? `${M(d.upkeep)}/ano` : `${M(d.price)} · manut. ${M(d.upkeep)}/ano`),
-        h('div', { class: 'row', style: { flexWrap: 'wrap' } }, !o ? ui.btn(d.staff ? 'Contratar' : 'Comprar', () => say(E.buy(s, d.id)), 'sm primary', s.player.money < d.price) : [
-          (!d.staff && o.lv < 3) ? ui.btn(`Melhorar ${M(E.upgradeCost(d, o.lv))}`, () => say(E.upgrade(s, d.id)), 'sm') : null, ui.btn(d.staff ? 'Dispensar' : 'Vender', () => say(E.sell(s, d.id)), 'sm ghost')
-        ]));
+      const locked = !o && (d.minLv || 0) > curLv;
+      return h('div', { class: 'tile', style: locked ? { opacity: .55 } : null },
+        h('div', { class: 'row between' },
+          ui.plate(locked ? 'lock' : ic, locked ? null : col),
+          locked
+            ? ui.badge(`Nível ${catNameForLv(d.minLv)}`)
+            : o && !d.staff
+              ? h('span', { class: 'lvdots' }, [1, 2, 3].map(i => h('i', { class: i <= o.lv ? 'on' : '' })))
+              : o ? ui.badge('ativo', 'ok') : null
+        ),
+        h('div', null, h('h4', null, d.name), h('div', { class: 'tiny mut' }, d.desc)),
+        h('div', { class: 'tiny mono dim' }, d.staff ? `${M(d.upkeep)}/ano` : `${M(d.price)} · manut. ${M(d.upkeep)}/ano`),
+        h('div', { class: 'row', style: { flexWrap: 'wrap' } },
+          locked
+            ? h('span', { class: 'tiny dim' }, `Disponível ao alcançar ${catNameForLv(d.minLv)}`)
+            : !o
+              ? ui.btn(d.staff ? 'Contratar' : 'Comprar', () => say(E.buy(s, d.id)), 'sm primary', s.player.money < d.price)
+              : [
+                  (!d.staff && o.lv < 3) ? ui.btn(`Melhorar ${M(E.upgradeCost(d, o.lv))}`, () => say(E.upgrade(s, d.id)), 'sm') : null,
+                  ui.btn(d.staff ? 'Dispensar' : 'Vender', () => say(E.sell(s, d.id)), 'sm ghost')
+                ]
+        )
+      );
     }))]);
   }
 
@@ -171,8 +195,20 @@
   }
 
   function resid(s) {
-    return h('div', { class: 'tiles' }, D.residences.map(r => h('div', { class: 'tile' }, ui.plate('house', 'var(--info)'), h('h4', null, r.name), h('div', { class: 'row' }, ui.badge('imposto ' + Math.round(r.tax * 100) + '%'), ui.badge('fãs ' + (r.fans >= 0 ? '+' : '') + r.fans, r.fans < 0 ? 'warn' : '')),
-      s.player.residence === r.id ? ui.badge('residência atual', 'ok') : ui.btn('Mudar (US$ 100 mil)', () => say(E.move(s, r.id)), 'sm'))));
+    const curLv = D.categories[s.player.catId].level;
+    return h('div', { class: 'tiles' }, D.residences.map(r => {
+      const locked = s.player.residence !== r.id && (r.minLv || 0) > curLv;
+      return h('div', { class: 'tile', style: locked ? { opacity: .55 } : null },
+        ui.plate(locked ? 'lock' : 'house', locked ? null : 'var(--info)'),
+        h('h4', null, r.name),
+        h('div', { class: 'row' }, ui.badge('imposto ' + Math.round(r.tax * 100) + '%'), ui.badge('popular. ' + (r.fans >= 0 ? '+' : '') + r.fans, r.fans < 0 ? 'warn' : '')),
+        s.player.residence === r.id
+          ? ui.badge('residência atual', 'ok')
+          : locked
+            ? ui.badge(`Desbloqueia em ${catNameForLv(r.minLv)}`)
+            : ui.btn('Mudar (US$ 100 mil)', () => say(E.move(s, r.id)), 'sm')
+      );
+    }));
   }
 
   ui.screens.assets = {

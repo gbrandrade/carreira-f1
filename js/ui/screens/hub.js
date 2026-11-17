@@ -1,4 +1,4 @@
-/* Central do piloto: métricas, radar de atributos, estado e próxima etapa. */
+/* Central do piloto: métricas, radar de atributos, estado (Reputação, Popularidade, Saúde) e próxima etapa. */
 (function () {
   const ui = Game.ui, h = ui.h, U = Game.utils, C = Game.data.categories, S = Game.systems, A = S.attributes, M = U.fmtMoney;
   const AX = [{ label: 'RIT' }, { label: 'RAC' }, { label: 'ATE' }, { label: 'EXP' }];
@@ -8,12 +8,13 @@
       const s = Game.state, p = s.player, se = s.season, cat = C[p.catId], now = A.playerAttrs(p, s.year), pk = A.playerPeak(p);
       const capEXP = Math.min(99, A.E(28) + pk.EXPb), cap = { RIT: pk.RIT, RAC: pk.RAC, ATE: pk.ATE, EXP: capEXP }, capGer = A.playerCapGer(p);
       const sl = S.superlicense.status(p, s.year);
+      const isRes = S.career.isReserve(p);
       let pos = null, pts = 0;
       if (se && s.phase === 'season') { const r = S.race.ranked(se).find(x => x.id === 'player'); if (r) { pos = r.pos; pts = r.pts; } }
 
       const stats = h('div', { class: 'statrow' },
         ui.panel({}, ui.stat('GER atual', now.GER, `teto ${capGer}`, null, ui.ring(now.GER, 100, { size: 58, cap: capGer, text: '', color: 'var(--accent)' }))),
-        ui.panel({}, ui.stat('Classificação', pos ? pos + 'º' : '—', s.phase === 'season' ? `${pts} pontos · ${cat.short}` : 'fora de temporada', null, ui.plate('trophy', 'var(--gold)', true))),
+        ui.panel({}, ui.stat('Classificação', isRes ? 'RES' : (pos ? pos + 'º' : '—'), s.phase === 'season' ? `${pts} pontos · ${cat.short}` : 'fora de temporada', null, ui.plate('trophy', 'var(--gold)', true))),
         ui.panel({}, ui.stat('Superlicença', `${sl.total}/${sl.need}`, sl.eligible ? 'apto para a F1' : `idade ${sl.age}/18 · monopostos ${p.singleSeaterSeasons}/2`, null, ui.ring(sl.total, sl.need, { size: 58, text: '', color: sl.eligible ? 'var(--ok)' : 'var(--warn)' }))),
         ui.panel({}, ui.stat('Caixa', M(p.money), `manutenção ${M(S.economy.upkeep(s))}/ano`, null, ui.plate('wallet', 'var(--ok)', true))));
 
@@ -21,23 +22,24 @@
         h('div', { class: 'grow' }, ui.radar(AX, [{ values: [cap.RIT, cap.RAC, cap.ATE, cap.EXP], color: 'var(--text-2)', dashed: true }, { values: [now.RIT, now.RAC, now.ATE, now.EXP] }], { min: 20 })),
         h('div', { class: 'row between' }, ['RIT', 'RAC', 'ATE', 'EXP'].map(k => h('div', { class: 'col gap-s center' }, h('span', { class: 'tiny dim mono' }, k), h('b', { class: 'mono' }, Math.round(now[k]), h('span', { class: 'dim', style: { fontWeight: 400 } }, '/' + Math.round(cap[k])))))));
 
-      const estado = ui.panel({ title: 'Estado' },
-        h('div', { class: 'pt', style: { marginTop: '.1rem' } }, 'Pressão externa'),
-        ui.bar('Mídia', p.pressure.media),
-        ui.bar('Fãs', p.pressure.fans),
+      const rep = p.reputation != null ? p.reputation : 45;
+      const estado = ui.panel({ title: 'Estado', right: s.phase === 'season' && p.teamRole ? ui.badge(p.teamRole, p.teamRole === '1º Piloto' ? 'ok' : p.teamRole === 'Piloto Reserva' ? 'info' : '') : null },
+        h('div', { class: 'pt', style: { marginTop: '.1rem' } }, 'Imagem e entorno'),
+        ui.bar('Reputação', rep),
+        ui.bar('Popular.', p.popularity),
         ui.bar('Família', p.pressure.family),
-        h('div', { class: 'pt', style: { marginTop: '.4rem' } }, 'Saúde e imagem'),
+        h('div', { class: 'pt', style: { marginTop: '.4rem' } }, 'Condição física e mental'),
         ui.bar('Físico', p.phys),
         ui.bar('Mente', p.mental),
-        ui.bar('Popular.', p.popularity),
         h('div', { class: 'grow' }),
-        p.injury > 0 ? ui.badge(`Lesionado · ${p.injury} etapa(s)`, 'bad') : h('div', { class: 'row' }, p.traits.map(id => ui.badge(Game.data.traits.find(t => t.id === id).name)))
+        p.injury > 0 ? ui.badge(`Lesionado · ${p.injury} etapa(s)`, 'bad') : h('div', { class: 'row', style: { flexWrap: 'wrap' } }, p.traits.map(id => ui.badge(Game.data.traits.find(t => t.id === id).name)))
       );
 
       return h('div', { class: 'screen' }, ui.head(`Olá, ${p.name.split(' ')[0]}`, `${cat.name} · ${s.year}${p.contract ? ' · ' + p.contract.teamName : ''}`), stats, h('div', { class: 'hubmid' }, radar, estado, this.next(s)));
     },
     next(s) {
       const p = s.player, se = s.season;
+      const isRes = S.career.isReserve(p);
       let title, sub, btn, art = null, info = null, rightTag = null;
       if (s.phase === 'offseason' && !p.contract) { title = 'Fora de temporada'; sub = 'Você precisa de um contrato para disputar o próximo ano.'; btn = ui.btn('Negociar contrato', () => ui.go('contract'), 'primary lg', false, 'doc'); }
       else if (s.phase === 'offseason') { title = `Temporada ${s.year}`; sub = `Contrato assinado com ${p.contract.teamName}.`; btn = ui.btn('Iniciar temporada', () => { S.career.startSeason(); ui.go('hub'); }, 'primary lg', false, 'play'); }
@@ -48,9 +50,10 @@
         title = n.circuit.name;
         sub = `Etapa ${n.idx + 1} de ${se.cal.length} · ${U.monthOfWeek(n.week)}${n.sprint ? ' · sprint' : ''}`;
         art = ui.track(n.circuit.id);
-        if (cat.level <= 6 && se.round > 0) rightTag = ui.badge('decisão', 'acc');
+        if (isRes) rightTag = se.reserveCallUp ? ui.badge('convocado!', 'ok') : ui.badge('reserva', 'info');
+        else if (cat.level <= 6 && S.career.isKeyJuniorRound(s)) rightTag = ui.badge('momento-chave', 'acc');
         info = h('div', { class: 'row' }, ui.badge(n.circuit.rain + '% chuva', n.circuit.rain >= 30 ? 'warn' : ''), ui.ccode(n.circuit.country));
-        btn = ui.btn('Próxima etapa', () => ui.go('race'), 'primary lg', false, 'flag');
+        btn = ui.btn(isRes && !se.reserveCallUp ? 'Ir para fim de semana' : 'Próxima etapa', () => ui.go('race'), 'primary lg', false, 'flag');
       }
       return ui.panel({ title: 'Próximo passo', cls: 'marks', right: rightTag },
         art ? h('div', { class: 'track-box' }, art) : h('div', { class: 'grow' }, h('div', { class: 'empty' }, ui.plate('flag', null, true))),

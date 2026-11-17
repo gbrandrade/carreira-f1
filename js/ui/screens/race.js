@@ -1,4 +1,4 @@
-/* Corrida: decisões > simulação (loader) > resultado com resumo, gráfico de posições e tabela. */
+/* Corrida: decisões > simulação > rádio tático (F2/F1) > resultado com resumo, gráfico e tabela. */
 (function () {
   const ui = Game.ui, h = ui.h, U = Game.utils, C = Game.data.categories, S = Game.systems;
   ui.race = { choices: { tyre: 1, setup: 'bal', risk: 1 }, week: null, tab: 0, inj: false };
@@ -11,6 +11,41 @@
       h('b', null, name), h('span', null, sub), pace != null ? h('div', { class: 'row between' }, h('span', { class: 'pips' }, 'ritmo ', pips(pace)), h('span', { class: 'pips' }, 'risco ', pips(risk))) : null))));
   }
 
+  function showSimSummaryModal(sm, done) {
+    const body = h('div', { class: 'col', style: { gap: '.6rem' } },
+      h('div', { class: 'mut small' }, sm.callUp
+        ? `Você acompanhou as etapas ${sm.fromRound}ª a ${sm.toRound}ª no simulador da equipe.`
+        : `Etapas ${sm.fromRound}ª a ${sm.toRound}ª simuladas até o próximo momento-chave da temporada.`
+      ),
+      !sm.callUp ? h('div', { class: 'kv3' },
+        [['Pontos somados', '+' + sm.pts], ['Vitórias', sm.wins], ['Pódios', sm.podiums]].map(([k, v]) =>
+          h('div', null, h('div', { class: 'k' }, k), h('div', { class: 'v' }, v))
+        )
+      ) : null,
+      sm.callUp
+        ? h('div', { class: 'row', style: { marginTop: '.2rem' } },
+            ui.badge('CONVOCAÇÃO F1', 'ok'),
+            h('span', { class: 'small' }, 'Um piloto titular ficou indisponível e você assumirá o carro titular no próximo GP!')
+          )
+        : sm.isMid
+          ? h('div', { class: 'row', style: { marginTop: '.2rem' } },
+              ui.badge('MEIO DE TEMPORADA', 'info'),
+              h('span', { class: 'small' }, `Você está em ${sm.pos}º no campeonato. Aproveite para definir o foco de desenvolvimento do carro em Pessoas e mídia!`)
+            )
+          : sm.decisive
+            ? h('div', { class: 'row', style: { marginTop: '.2rem' } },
+                ui.badge('DISPUTA DE TÍTULO', 'acc'),
+                h('span', { class: 'small' }, `Você está em ${sm.pos}º no campeonato (${sm.gap === 0 ? 'líder' : `-${sm.gap} pts para o líder`}) antes da reta final!`)
+              )
+            : h('div', { class: 'small mut' }, `Temporada encerrada em ${sm.pos}º lugar.`)
+    );
+    ui.modal({
+      title: sm.callUp ? 'Oportunidade na Fórmula 1!' : sm.isMid ? 'Parada de meio de temporada' : sm.decisive ? 'Reta final decisiva!' : 'Simulação concluída',
+      body,
+      actions: [{ label: 'Continuar', cls: 'primary', icon: 'right', fn: done }]
+    });
+  }
+
   ui.screens.race = {
     render() {
       const s = Game.state;
@@ -20,9 +55,16 @@
     pre(s) {
       const p = s.player, se = s.season, cal = se.cal[se.round], cat = C[se.catId], r = ui.race, inj = p.injury > 0, cc = cal.circuit;
       const isJunior = cat.level <= 6;
-      const stageTag = isJunior
-        ? (se.round === 0 ? ui.badge('abertura da temporada', 'info') : ui.badge('decisão de título', 'acc'))
-        : null;
+      const isRes = S.career.isReserve(p);
+      const isCallUp = isRes && !!se.reserveCallUp;
+
+      const stageTag = isCallUp
+        ? ui.badge('convocado para correr', 'ok')
+        : isRes
+          ? ui.badge('piloto reserva', 'info')
+          : isJunior && S.career.isKeyJuniorRound(s)
+            ? ui.badge(se.round === 0 ? 'abertura' : se.round === Math.floor(se.cal.length / 2) ? 'meio de temporada' : 'decisão de título', 'acc')
+            : null;
 
       const info = ui.panel({ title: `Etapa ${cal.idx + 1} de ${se.cal.length}`, cls: 'marks', right: stageTag },
         h('div', { class: 'track-box' }, ui.track(cc.id)),
@@ -32,19 +74,86 @@
         inj ? ui.badge(`Lesionado: ${p.injury} etapa(s)`, 'bad') : null
       );
 
-      const dec = ui.panel({ title: 'Decisões pré-corrida' },
-        group('Estratégia de pneus', 'tyre', [[0, 'Conservadora', 'brilha no fim e na chuva', 1, 1], [1, 'Equilibrada', 'ritmo constante', 2, 2], [2, 'Agressiva', 'muito ritmo + bônus com SC', 3, 3]]),
-        group('Setup do carro', 'setup', [['dw', 'Carga aero', 'curvas e pista molhada'], ['bal', 'Equilibrado', 'seguro em qualquer pista'], ['pw', 'Retas', 'velocidade final máxima']]),
-        group('Agressividade', 'risk', [[0, 'Cautelosa', 'evita batidas e chuva', 1, 1], [1, 'Normal', 'equilibrada', 2, 2], [2, 'Agressiva', 'ultrapassagens no limite', 3, 3]]),
-        inj ? h('div', { class: 'col' }, h('div', { class: 'pt' }, 'Lesão'), ui.tabs([[false, 'Descansar'], [true, 'Correr lesionado']], r.inj, v => { r.inj = v; ui.refresh(); })) : null,
-        h('div', { class: 'grow' }),
-        h('div', { class: 'tiny dim' }, 'Acertar o setup do perfil da pista dá grande ganho de tempo. Pneus e agressividade definem o ritmo, desgaste e risco de abandono.')
-      );
+      const dec = isRes && !isCallUp
+        ? ui.panel({ title: 'Função de Piloto Reserva' },
+            h('div', { class: 'empty' },
+              ui.plate('sim', 'var(--info)', true),
+              h('h3', null, 'Trabalho nos boxes e simulador'),
+              h('div', { class: 'small mut' }, 'Você não está escalado como titular neste GP, mas acompanha a equipe e evolui no simulador. Caso algum titular se lesione ou adoeça, você será convocado imediatamente.')
+            )
+          )
+        : ui.panel({ title: 'Decisões pré-corrida' },
+            group('Estratégia de pneus', 'tyre', [[0, 'Conservadora', 'brilha no fim e na chuva', 1, 1], [1, 'Equilibrada', 'ritmo constante', 2, 2], [2, 'Agressiva', 'muito ritmo + bônus com SC', 3, 3]]),
+            group('Setup do carro', 'setup', [['dw', 'Carga aero', 'curvas e pista molhada'], ['bal', 'Equilibrado', 'seguro em qualquer pista'], ['pw', 'Retas', 'velocidade final máxima']]),
+            group('Agressividade', 'risk', [[0, 'Cautelosa', 'evita batidas e chuva', 1, 1], [1, 'Normal', 'equilibrada', 2, 2], [2, 'Agressiva', 'ultrapassagens no limite', 3, 3]]),
+            inj ? h('div', { class: 'col' }, h('div', { class: 'pt' }, 'Lesão'), ui.tabs([[false, 'Descansar'], [true, 'Correr lesionado']], r.inj, v => { r.inj = v; ui.refresh(); })) : null,
+            h('div', { class: 'grow' }),
+            h('div', { class: 'tiny dim' }, 'Acertar o setup do perfil da pista dá grande ganho de tempo. Pneus e agressividade definem o ritmo, desgaste e risco de abandono.')
+          );
 
-      const go = () => ui.simulate(['Classificação', 'Largada', 'Corrida', 'Apuração'], () => { r.week = S.career.playRound(Object.assign({}, r.choices, { raceInjured: r.inj })); r.tab = r.week.rest ? 'q' : r.week.results.length - 1; r.inj = false; ui.refresh(); });
-      const rest = inj && !r.inj;
+      const finishPreparedRound = wk => {
+        S.career.commitRound(wk);
+        r.week = wk;
+        r.tab = wk.rest ? 'q' : wk.results.length - 1;
+        r.inj = false;
+        ui.refresh();
+      };
+
+      const go = () => ui.simulate(['Classificação', 'Largada', 'Corrida', 'Apuração'], () => {
+        const wk = S.career.prepareRound(Object.assign({}, r.choices, { raceInjured: r.inj, interactive: true }));
+        if (wk.midEvent) {
+          const ev = wk.midEvent;
+          ui.modal({
+            title: ev.title,
+            body: h('div', { class: 'col', style: { gap: '.6rem' } },
+              h('div', { class: 'row', style: { alignItems: 'flex-start' } }, ui.plate('mic', 'var(--accent)', true), h('div', { class: 'mut' }, ev.text))
+            ),
+            stack: true,
+            actions: ev.options.map(opt => ({
+              label: `${opt.label} — ${opt.sub}`,
+              icon: 'right',
+              fn: () => {
+                S.race.applyMidRaceChoice(s, wk, opt.id);
+                finishPreparedRound(wk);
+              }
+            }))
+          });
+          return;
+        }
+        finishPreparedRound(wk);
+      });
+
+      const fastForward = () => {
+        const sm = S.career.fastForwardToMilestone(s);
+        ui.renderChrome();
+        if (sm) {
+          showSimSummaryModal(sm, () => {
+            if (se.finished) ui.finishSeason();
+            else ui.refresh();
+          });
+        } else {
+          ui.refresh();
+        }
+      };
+
+      const rest = (inj && !r.inj) || (isRes && !isCallUp);
+      const canFastForward = (isJunior && !isRes && se.round < se.cal.length - 1) || (isRes && !isCallUp);
+
       return h('div', { class: 'screen' }, ui.head(cc.name, `${cat.name} · ${s.year}`), h('div', { class: 'cols2' }, info, dec),
-        ui.panel({ cls: 'cta' }, h('div', { class: 'msg' }, rest ? 'Você vai perder esta etapa para se recuperar.' : h('span', null, 'Tudo pronto para a ', h('b', null, 'largada'), '.')), ui.btn(rest ? 'Descansar' : 'Largar', go, 'primary lg', false, rest ? 'heart' : 'play')));
+        ui.panel({ cls: 'cta' },
+          h('div', { class: 'msg' },
+            isRes && !isCallUp
+              ? 'Acompanhe o fim de semana no simulador ou avance até sua próxima convocação.'
+              : rest
+                ? 'Você vai perder esta etapa para se recuperar.'
+                : h('span', null, 'Tudo pronto para a ', h('b', null, 'largada'), '.')
+          ),
+          h('div', { class: 'row' },
+            canFastForward ? ui.btn(isRes ? 'Simular até convocação' : 'Simular até momento-chave', fastForward, '', false, 'right') : null,
+            ui.btn(isRes && !isCallUp ? 'Acompanhar GP' : rest ? 'Descansar' : 'Largar', go, 'primary lg', false, rest ? 'heart' : 'play')
+          )
+        )
+      );
     },
     result(s) {
       const r = ui.race, wk = r.week, se = s.season, tabs = [['q', 'Classificação']].concat(wk.results.map((x, i) => [i, x.name]));
@@ -70,32 +179,7 @@
           if (se.finished) ui.finishSeason();
           else ui.go('hub');
         };
-        const proceed = () => ui.runEvents(out.events, afterEvents);
-
-        if (out.simSummary) {
-          const sm = out.simSummary;
-          const body = h('div', { class: 'col', style: { gap: '.6rem' } },
-            h('div', { class: 'mut small' }, `Nas categorias de base, as etapas intermediárias (${sm.fromRound}ª a ${sm.toRound}ª) foram simuladas automaticamente.`),
-            h('div', { class: 'kv3' },
-              [['Pontos somados', '+' + sm.pts], ['Vitórias', sm.wins], ['Pódios', sm.podiums]].map(([k, v]) =>
-                h('div', null, h('div', { class: 'k' }, k), h('div', { class: 'v' }, v))
-              )
-            ),
-            sm.decisive
-              ? h('div', { class: 'row', style: { marginTop: '.2rem' } },
-                  ui.badge('DISPUTA DE TÍTULO', 'acc'),
-                  h('span', { class: 'small' }, `Você está em ${sm.pos}º no campeonato (${sm.gap === 0 ? 'líder' : `-${sm.gap} pts para o líder`}) antes da etapa decisiva!`)
-                )
-              : h('div', { class: 'small mut' }, `Temporada regular concluída em ${sm.pos}º lugar.`)
-          );
-          ui.modal({
-            title: sm.decisive ? 'Reta final decisiva!' : 'Etapas intermediárias simuladas',
-            body,
-            actions: [{ label: 'Continuar', cls: 'primary', icon: 'right', fn: proceed }]
-          });
-          return;
-        }
-        proceed();
+        ui.runEvents(out.events, afterEvents);
       };
 
       return h('div', { class: 'screen' }, ui.head(`Resultado · ${wk.circuit.name}`, wk.rest ? 'Você ficou fora desta etapa.' : `${total} pontos no fim de semana`, ui.tabs(tabs, r.tab, t => { r.tab = t; ui.refresh(); })), hero,

@@ -75,7 +75,7 @@
       const s = Game.state, p = s.player, c = p.contract, sl = S.superlicense.status(p, s.year);
       if (s.phase === 'offseason') S.contracts.ensureFallback(s);
       const cur = ui.panel({ title: 'Contrato atual', cls: 'marks' }, c ? [
-        h('div', { class: 'row' }, ui.plate('doc', null, true), h('div', null, h('div', { style: { fontSize: '1.15rem', fontWeight: 650, letterSpacing: '-.02em' } }, c.teamName), h('div', { class: 'small mut' }, C[c.catId].name))),
+        h('div', { class: 'row' }, ui.plate('doc', null, true), h('div', null, h('div', { style: { fontSize: '1.15rem', fontWeight: 650, letterSpacing: '-.02em' } }, c.teamName), h('div', { class: 'small mut' }, C[c.catId].name + (c.role === 'reserve' ? ' · Piloto Reserva' : '')))),
         h('div', { class: 'kv3' }, [['Restam', c.years + ' ano(s)'], [salLabel(c), M(Math.abs(c.salary))], ['Imagem', (c.img || 0) + '%']].map(([k, v]) => h('div', null, h('div', { class: 'k' }, k), h('div', { class: 'v' }, v)))),
         h('div', { class: 'kv3' }, [['Título', M(c.bTitle)], ['Vitória', M(c.bWin)], ['Pódio', M(c.bPodium)]].map(([k, v]) => h('div', null, h('div', { class: 'k' }, k), h('div', { class: 'v' }, v)))),
         h('div', { class: 'row' }, c.exit ? ui.badge('cláusula de saída', 'ok') : null, c.option ? ui.badge('opção de renovação', 'ok') : null),

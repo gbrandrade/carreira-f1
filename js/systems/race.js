@@ -1,4 +1,4 @@
-/* Simulação de fim de semana: classificação, corridas (sprint/principal), impacto real de estratégia e resumo textual. */
+/* Simulação de fim de semana: classificação, corridas (sprint/principal), decisão tática no meio da corrida e resumo textual. */
 (function () {
   const R = Game.rng, U = Game.utils, C = Game.data.categories, cl = U.clamp;
   const Race = Game.systems.race = {};
@@ -13,7 +13,6 @@
   };
   const perf = (e, cat, m) => cat.carW * e.car + (1 - cat.carW) * drvScore(e, m);
 
-  // Impacto significativo do setup conforme perfil da pista e clima
   const setupBonus = (s, circ, wet, isQuali) => {
     if (!s) return 0;
     let b = 0;
@@ -22,47 +21,33 @@
     else b = isQuali ? -2.2 : -2.6;
 
     if (wet) {
-      if (s === 'dw') b += 2.0;      // mais downforce ajuda muito na chuva
-      else if (s === 'pw') b -= 1.8; // pouca asa sofre na pista molhada
+      if (s === 'dw') b += 2.0;
+      else if (s === 'pw') b -= 1.8;
     }
     return b;
   };
 
-  // Impacto tático dos pneus (conservador x equilibrado x agressivo)
   function tyreEffect(tyre, circ, wet, sc, ate) {
-    const mgmt = (ate - 50) / 100; // pilotos mais atentos conservam melhor pneus macios
+    const mgmt = (ate - 50) / 100;
     if (tyre === 2) {
       let pace = 2.8 + (circ.q >= 1.3 ? 1.0 : 0);
-      if (sc) pace += 2.2; // Safety car permite troca grátis e renova ritmo
-      else pace -= cl(2.1 - mgmt * 1.1, 0.7, 2.3); // desgaste no fim do stint
+      if (sc) pace += 2.2;
+      else pace -= cl(2.1 - mgmt * 1.1, 0.7, 2.3);
       if (wet) pace -= 1.2;
       return { pace, dnfMult: wet ? 1.3 : 1.15 };
     }
     if (tyre === 0) {
       let pace = -1.4;
-      if (!sc) pace += 2.6; // brilha no fim da corrida sem SC
-      if (wet) pace += 1.6; // constância na pista molhada
+      if (!sc) pace += 2.6;
+      if (wet) pace += 1.6;
       return { pace, dnfMult: wet ? 0.78 : 0.88 };
     }
     return { pace: 0.6, dnfMult: 1.0 };
   }
 
-  // Impacto do estilo de pilotagem / agressividade
   function riskEffect(risk, circ, wet) {
-    if (risk === 2) {
-      return {
-        pace: 2.5 + (circ.q >= 1.4 ? 1.0 : 0),
-        dnfMult: 1.85,
-        penMult: 2.1
-      };
-    }
-    if (risk === 0) {
-      return {
-        pace: wet ? 0.5 : -1.8, // cautela evita erros e ganha ritmo relativo na chuva
-        dnfMult: 0.40,
-        penMult: 0.25
-      };
-    }
+    if (risk === 2) return { pace: 2.5 + (circ.q >= 1.4 ? 1.0 : 0), dnfMult: 1.85, penMult: 2.1 };
+    if (risk === 0) return { pace: wet ? 0.5 : -1.8, dnfMult: 0.40, penMult: 0.25 };
     return { pace: 0, dnfMult: 1.0, penMult: 1.0 };
   }
 
@@ -99,12 +84,33 @@
     return { pts, dnfAt: dnf ? end : null };
   }
 
+  function buildRows(order, entries, cat, spec, ctx, tyre, risk) {
+    const fin = order.filter(r => !r.dnf).sort((a, b) => b.v - a.v);
+    const out = order.filter(r => r.dnf).sort((a, b) => b.dnfLap - a.dnfLap);
+    const sorted = fin.concat(out);
+
+    const flC = fin.slice(0, 10).map(r => ({
+      r,
+      v: perf(r.e, cat, 'r') + (r.id === 'player' && tyre === 2 ? 1.8 : 0) + (r.id === 'player' && risk === 2 ? 1.2 : 0) + R.normal(0, 2.3)
+    })).sort((a, b) => b.v - a.v)[0];
+    const flId = spec.fl && flC ? flC.r.id : null;
+    const poleId = spec.pole ? ctx.poleId : null;
+
+    return sorted.map((r, i) => {
+      const classified = !r.dnf;
+      let pts = classified ? (spec.pts[i] || 0) : 0;
+      if (poleId === r.id) pts += spec.pole;
+      if (flId === r.id && i < 10 && classified) pts += spec.fl;
+      return { id: r.id, teamId: r.e.teamId, pos: i + 1, grid: r.gp, dnf: r.dnf, dnfLap: r.dnfLap, pts, fl: flId === r.id, pole: poleId === r.id, pen: r.pen };
+    });
+  }
+
   Race.simRace = function (state, entries, cat, circ, spec, grid, ctx) {
     const n = entries.length, ch = ctx.choices || {}, wet = ctx.wet, sc = R.chance(wet ? .5 : .3);
     const tyre = ch.tyre != null ? ch.tyre : 1, risk = ch.risk != null ? ch.risk : 1;
     const sig = 2.2 + (wet ? 1.8 : 0) + (sc ? .7 : 0);
 
-    const res = entries.map(e => {
+    const rawRes = entries.map(e => {
       const gp = grid.indexOf(e.id) + 1;
       let v = perf(e, cat, 'r') + (n - gp) / n * circ.q * 2.2 + R.normal(0, sig);
       let dnfP = cat.dnf * (1 + (82 - e.attrs.ATE) / 70) * (1 + (80 - e.car) / 110) * (wet ? 1.5 : 1);
@@ -127,29 +133,99 @@
       return { id: e.id, e, gp, v, dnf, dnfLap: dnf ? R.int(1, cat.laps) : 0, pen, cause, stratInfo };
     });
 
-    const fin = res.filter(r => !r.dnf).sort((a, b) => b.v - a.v);
-    const out = res.filter(r => r.dnf).sort((a, b) => b.dnfLap - a.dnfLap);
-    const order = fin.concat(out);
-
-    const flC = fin.slice(0, 10).map(r => ({
-      r,
-      v: perf(r.e, cat, 'r') + (r.id === 'player' && tyre === 2 ? 1.8 : 0) + (r.id === 'player' && risk === 2 ? 1.2 : 0) + R.normal(0, 2.3)
-    })).sort((a, b) => b.v - a.v)[0];
-    const flId = spec.fl && flC ? flC.r.id : null;
-    const poleId = spec.pole ? ctx.poleId : null;
-
-    const rows = order.map((r, i) => {
-      const classified = !r.dnf;
-      let pts = classified ? (spec.pts[i] || 0) : 0;
-      if (poleId === r.id) pts += spec.pole;
-      if (flId === r.id && i < 10 && classified) pts += spec.fl;
-      return { id: r.id, teamId: r.e.teamId, pos: i + 1, grid: r.gp, dnf: r.dnf, dnfLap: r.dnfLap, pts, fl: flId === r.id, pole: poleId === r.id, pen: r.pen };
-    });
-
-    const out2 = { id: spec.id, name: spec.name, grid, order: rows, wet, sc, flId, poleId, player: null };
+    const rows = buildRows(rawRes, entries, cat, spec, ctx, tyre, risk);
+    const out2 = { id: spec.id, name: spec.name, grid, order: rows, wet, sc, player: null, _raw: rawRes, _spec: spec, _ctx: ctx };
     const me = rows.find(r => r.id === 'player');
-    if (me) out2.player = Race.playerSummary(state, entries, rows, me, res.find(r => r.id === 'player'), ctx, circ, tyre, sc, risk);
+    if (me) out2.player = Race.playerSummary(state, entries, rows, me, rawRes.find(r => r.id === 'player'), ctx, circ, tyre, sc, risk);
     return out2;
+  };
+
+  /* Gera decisão tática de rádio para corridas principais de F2 e F1 quando há Safety Car ou chuva repentina. */
+  Race.buildMidRaceEvent = function (cat, circ, mainRace) {
+    if (!mainRace || !mainRace.player || mainRace.player.dnf || cat.level < 7) return null;
+    const midLap = Math.max(8, Math.round(cat.laps * 0.52));
+    if (mainRace.sc) {
+      return {
+        type: 'sc',
+        title: `Rádio da equipe · Volta ${midLap}/${cat.laps}`,
+        text: `Safety Car na pista em ${circ.name}! O engenheiro pergunta se você entra nos boxes para colocar pneus macios novos ou mantém a posição de pista.`,
+        options: [
+          { id: 'box', label: 'Entrar nos boxes (pneus novos)', sub: 'Perde posição na parada, mas ganha ritmo forte no relargada' },
+          { id: 'stay', label: 'Ficar na pista (ganhar posição)', sub: 'Assume a frente no pelotão, mas precisa segurar com pneus usados' }
+        ]
+      };
+    }
+    if (mainRace.wet || R.chance(0.32)) {
+      return {
+        type: 'rain',
+        title: `Rádio da equipe · Volta ${midLap}/${cat.laps}`,
+        text: `Nuvens carregadas sobre ${circ.name} e garoa começando no setor 2! Qual é a chamada estratégica?`,
+        options: [
+          { id: 'inter', label: 'Parar agora para intermediários', sub: 'Aposta segura se a chuva apertar' },
+          { id: 'slick', label: 'Segurar mais voltas na pista', sub: 'Arriscado: ganha tempo se secar, escorrega se molhar' }
+        ]
+      };
+    }
+    return null;
+  };
+
+  /* Aplica a decisão de rádio no meio da corrida (F2/F1) antes de consolidar os pontos da etapa. */
+  Race.applyMidRaceChoice = function (state, week, choiceId) {
+    if (!week || !week.midEvent || !choiceId) return week;
+    const mainRace = week.results[week.results.length - 1];
+    if (!mainRace || !mainRace._raw || !mainRace.player || mainRace.player.dnf) return week;
+
+    const pRaw = mainRace._raw.find(r => r.id === 'player');
+    if (!pRaw || pRaw.dnf) return week;
+
+    const circ = week.circuit;
+    const evType = week.midEvent.type;
+    let deltaV = 0;
+    let note = '';
+
+    if (evType === 'sc') {
+      if (choiceId === 'box') {
+        // Parar no SC é ótimo em pistas com ultrapassagem (circ.q baixo), arriscado em Mônaco/Hungria (circ.q alto)
+        const success = R.chance(circ.q >= 1.5 ? 0.38 : 0.72);
+        deltaV = success ? 2.6 : -1.8;
+        note = success
+          ? 'Chamada de rádio certeira: pneus novos no Safety Car renderam ultrapassagens na relargada.'
+          : 'Parada no Safety Car custou posições difíceis de recuperar no tráfego.';
+      } else {
+        const success = R.chance(circ.q >= 1.4 ? 0.70 : 0.42);
+        deltaV = success ? 2.2 : -2.1;
+        note = success
+          ? 'Você segurou a posição na relargada e administrou os pneus até o fim.'
+          : 'Ficar na pista sem parar cobrou o preço nas últimas voltas com pneus gastos.';
+      }
+    } else if (evType === 'rain') {
+      if (choiceId === 'inter') {
+        const heavyRain = mainRace.wet || R.chance(0.58);
+        deltaV = heavyRain ? 3.0 : -1.9;
+        note = heavyRain
+          ? 'A chuva apertou logo em seguida e a troca imediata para intermediários foi genial.'
+          : 'A garoa passou rápido e a parada antecipada custou tempo precioso.';
+      } else {
+        const dryHold = !mainRace.wet && R.chance(0.55);
+        deltaV = dryHold ? 2.5 : -2.6;
+        note = dryHold
+          ? 'Você segurou o carro na pista seca enquanto rivais pararam à toa!'
+          : 'A pista encharcou e você perdeu muito tempo escorregando antes de parar.';
+      }
+    }
+
+    pRaw.v += deltaV;
+    const cat = Game.data.categories[state.season.catId];
+    const ch = (mainRace._ctx && mainRace._ctx.choices) || {};
+    const rows = buildRows(mainRace._raw, week._entries, cat, mainRace._spec, mainRace._ctx, ch.tyre != null ? ch.tyre : 1, ch.risk != null ? ch.risk : 1);
+    mainRace.order = rows;
+    const me = rows.find(r => r.id === 'player');
+    if (me) {
+      mainRace.player = Race.playerSummary(state, week._entries, rows, me, pRaw, mainRace._ctx, circ, ch.tyre != null ? ch.tyre : 1, mainRace.sc, ch.risk != null ? ch.risk : 1);
+      mainRace.player.lines.splice(1, 0, note);
+    }
+    week.midEvent = null;
+    return week;
   };
 
   Race.playerSummary = function (state, entries, rows, me, raw, ctx, circ, tyre, sc, risk) {
@@ -212,7 +288,19 @@
       }
       results.push(Race.simRace(state, entries, cat, circ, spec, grid, ctx));
     });
-    return { circuit: circ, wet, sprint: cal.sprint, quali: q1, results, expected: Race.expected(entries, cat), risk: (choices && choices.risk != null) ? choices.risk : 1 };
+    const mainRace = results[results.length - 1];
+    const midEvent = (opts && opts.allowMidRace) ? Race.buildMidRaceEvent(cat, circ, mainRace) : null;
+    return {
+      circuit: circ,
+      wet,
+      sprint: cal.sprint,
+      quali: q1,
+      results,
+      expected: Race.expected(entries, cat),
+      risk: (choices && choices.risk != null) ? choices.risk : 1,
+      midEvent,
+      _entries: entries
+    };
   };
 
   Race.applyResults = function (season, week) {

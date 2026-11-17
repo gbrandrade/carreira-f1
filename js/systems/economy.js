@@ -226,7 +226,7 @@
     const p = s.player, r = D.residences.find(x => x.id === id), cur = D.residences.find(x => x.id === p.residence);
     if (id === p.residence) return { ok: false, msg: 'Você já mora lá.' };
     if (p.money < 100000) return { ok: false, msg: 'A mudança custa US$ 100 mil.' };
-    p.money -= 100000; p.residence = id; p.pressure.fans = U.clamp(p.pressure.fans + (r.fans - cur.fans), 0, 100);
+    p.money -= 100000; p.residence = id; p.popularity = U.clamp(p.popularity + (r.fans - cur.fans), 0, 100);
     return { ok: true, msg: `Você agora mora em: ${r.name}.` };
   };
 

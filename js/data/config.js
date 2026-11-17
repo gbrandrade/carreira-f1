@@ -9,8 +9,8 @@ Game.config = {
   refreshes: 3,             // trocas de carta na roleta
   rarity: { ruim: 25, mediano: 35, bom: 25, lendario: 13, prime: 2 },
   f1MinAge: 18,
-  frustratedAge: 25,        // sem superlicença até essa idade = carreira frustrada
-  neverF1QuitAge: 30,
+  frustratedAge: 28,        // sem superlicença até essa idade = carreira frustrada
+  neverF1QuitAge: 32,
   retireOptionalAge: 35,
   retireForcedAge: 45,
   regulationCycle: 4,       // virada grande de regulamento a cada N anos
@@ -18,8 +18,7 @@ Game.config = {
   eventsPerRound: [1, 2],   // eventos por etapa (mínimo e máximo)
   sprintsByYear: { default: 6, 2027: 10 },
   superlicense: { points: 40, windowYears: 3, kartMax: 12, kartValidYears: 5, minSeasons: 2 },
-  pressureFireLimit: 8,     // barra da equipe abaixo disso por 2 etapas = demissão
   luckRange: [-4, 1],       // sorte aplicada ao teto de cada atributo na criação
-  trainCap: 4,
+  trainCap: 6,
   assetSellRate: 0.7
 };

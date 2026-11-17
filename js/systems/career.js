@@ -1,4 +1,4 @@
-/* Orquestrador da carreira: novo jogo, início/fim de temporada, etapas, simulação rápida da base, aposentadoria e finais. */
+/* Orquestrador da carreira: novo jogo, início/fim de temporada, etapas, evolução dinâmica, H2H, reserva F1 e finais. */
 (function () {
   const D = Game.data, R = Game.rng, U = Game.utils, C = D.categories, cfg = Game.config, cl = U.clamp;
   const S = Game.systems, Car = S.career = {};
@@ -15,10 +15,15 @@
     const lk = () => L[0] + (L[1] - L[0]) * R.float();
     s.player = {
       name: setup.name, country: setup.country, birth: s.year - cfg.startAge, origin: o.id, traits: setup.traits, picks: setup.picks, pickSrc: setup.pickSrc,
-      luck: { EXP: lk(), RAC: lk(), ATE: lk(), RIT: lk() }, train: 0, catId: 'kartReg', teamId: null, contract: null,
-      money: o.money, supportLeft: 0, debtYears: 0, bankrupt: false, bankruptcies: 0, phys: 85, mental: 80, popularity: 10,
-      pressure: { team: 60, media: 45, fans: 35, family: o.family }, injury: 0, assets: [], invest: [], sponsors: [], agent: false,
+      luck: { EXP: lk(), RAC: lk(), ATE: lk(), RIT: lk() },
+      capBonus: { RIT: 0, RAC: 0, ATE: 0, EXP: 0 },
+      train: 0, catId: 'kartReg', teamId: null, contract: null,
+      money: o.money, supportLeft: 0, debtYears: 0, bankrupt: false, bankruptcies: 0,
+      phys: 85, mental: 80, popularity: 10, reputation: 45,
+      pressure: { family: o.family }, injury: 0, assets: [], invest: [], sponsors: [], agent: false,
       engineerRel: 50, residence: 'BRA', devFocus: null, interviewDone: false, carBonus: 0,
+      h2h: { qualiW: 0, qualiL: 0, raceW: 0, raceL: 0, mateId: null, mateName: '' },
+      teamRole: 'Igualdade',
       stats: { races: 0, wins: 0, podiums: 0, poles: 0, fl: 0, points: 0, titles: 0, dnfs: 0, seasons: 0 },
       f1: { races: 0, wins: 0, podiums: 0, poles: 0, fl: 0, points: 0, titles: 0 }, titlesList: [], superPoints: [], singleSeaterSeasons: 0,
       lastSeason: null, season: null, ach: {}, flags: {}, academy: null, fired: false, forcedUp: false, noSeat: false, firedCount: 0
@@ -31,37 +36,99 @@
     return s;
   };
 
+  Car.isReserve = p => !!(p && p.contract && p.contract.role === 'reserve');
+
   Car.startSeason = function () {
     const s = Game.state, p = s.player, c = p.contract;
     if (!c) return null;
     p.catId = c.catId; p.teamId = c.teamId;
     S.world.updateCars(s);
-    S.world.seatPlayer(s);
-    const entries = S.world.entries(s, p.catId, true), names = {};
-    entries.forEach(e => { const t = S.world.team(s, p.catId, e.teamId); names[e.id] = { name: e.name, country: e.country, teamId: e.teamId, teamName: t ? t.name : '-' }; });
+
+    const reserve = Car.isReserve(p);
+    if (!reserve) {
+      S.world.seatPlayer(s);
+    } else {
+      // Como reserva na F1, os 2 titulares permanecem na equipe
+      S.world.fillSeats(s, p.catId);
+    }
+
+    const entries = S.world.entries(s, p.catId, !reserve), names = {};
+    entries.forEach(e => {
+      const t = S.world.team(s, p.catId, e.teamId);
+      names[e.id] = { name: e.name, country: e.country, teamId: e.teamId, teamName: t ? t.name : '-' };
+    });
+    if (reserve) {
+      const t = S.world.team(s, p.catId, p.teamId);
+      names.player = { name: p.name, country: p.country, teamId: p.teamId, teamName: t ? t.name : '-' };
+    }
+
+    const mate = entries.find(e => !e.isPlayer && e.teamId === p.teamId);
+    p.h2h = { qualiW: 0, qualiL: 0, raceW: 0, raceL: 0, mateId: mate ? mate.id : null, mateName: mate ? mate.name : '' };
+    if (reserve) {
+      p.teamRole = 'Piloto Reserva';
+    } else if (mate) {
+      const myGer = S.contracts.ger(s);
+      p.teamRole = myGer >= mate.attrs.GER + 3 ? '1º Piloto' : myGer <= mate.attrs.GER - 3 ? '2º Piloto' : 'Igualdade';
+    } else {
+      p.teamRole = 'Igualdade';
+    }
+
     s.season = {
       year: s.year, catId: p.catId, cal: S.calendar.build(p.catId, s.year), round: 0,
-      standings: { drivers: {}, teams: {} }, entries: names, last: null, finished: false
+      standings: { drivers: {}, teams: {} }, entries: names, last: null, finished: false,
+      reserveCallUp: false
     };
     p.season = { races: 0, rounds: 0, wins: 0, podiums: 0, poles: 0, points: 0, top10: 0, champion: false };
     p.devFocus = null; p.interviewDone = false; p.carBonus = 0; p.forcedUp = false; p.fired = false; p.noSeat = false;
+
     const paid = S.economy.payEntry(s);
     S.economy.genSponsorOffers(s);
     s.phase = 'season'; s.offers = []; s.summary = null;
-    S.news.add(`Temporada ${s.year} de ${C[p.catId].short} começa. Equipe: ${c.teamName}.`);
+    S.news.add(`Temporada ${s.year} de ${C[p.catId].short} começa. Equipe: ${c.teamName}${reserve ? ' (Piloto Reserva)' : ''}.`);
     Car.save();
     return paid;
   };
 
-  Car.playRound = function (choices) {
+  /* Prepara a simulação de uma etapa (permite decisão tática no meio da corrida em F2/F1 antes de finalizar). */
+  Car.prepareRound = function (choices) {
     choices = choices || {};
     const s = Game.state, p = s.player, se = s.season, cat = C[se.catId], cal = se.cal[se.round];
     const injured = p.injury > 0;
-    const rest = !!choices.rest || p.noSeat || (injured && !choices.raceInjured);
-    const entries = S.world.entries(s, se.catId, !rest, { injured: injured && !rest });
-    const week = S.race.simulateWeekend(s, entries, cat, cal, choices, { racingInjured: injured && !rest });
-    S.race.applyResults(se, week);
+    const reserve = Car.isReserve(p);
+    const reserveRacing = reserve && !!se.reserveCallUp;
+    const rest = !!choices.rest || p.noSeat || (reserve && !reserveRacing) || (injured && !choices.raceInjured);
+
+    let entries = S.world.entries(s, se.catId, !rest, { injured: injured && !rest });
+    // Se for piloto reserva chamado para substituir titular lesionado, substitui temporariamente o companheiro de menor GER
+    if (reserveRacing && !rest) {
+      const teamTitulars = entries.filter(e => !e.isPlayer && e.teamId === p.teamId).sort((a, b) => a.attrs.GER - b.attrs.GER);
+      if (teamTitulars.length >= 2) {
+        const replaced = teamTitulars[0];
+        entries = entries.filter(e => e.id !== replaced.id);
+      }
+    }
+
+    const week = S.race.simulateWeekend(s, entries, cat, cal, choices, {
+      racingInjured: injured && !rest,
+      allowMidRace: !rest && !!choices.interactive && cat.level >= 7
+    });
     week.rest = rest;
+    week.reserveRacing = reserveRacing;
+    return week;
+  };
+
+  /* Consolida pontos, estatísticas, H2H e evolução dinâmica após o resultado final da etapa. */
+  Car.commitRound = function (week) {
+    const s = Game.state, p = s.player, se = s.season, cat = C[se.catId], cal = se.cal[se.round];
+    const injured = p.injury > 0;
+    const rest = week.rest;
+
+    // Limpa referências internas antes de salvar no estado
+    (week.results || []).forEach(r => { delete r._raw; delete r._spec; delete r._ctx; });
+    delete week._entries;
+
+    S.race.applyResults(se, week);
+
     if (!rest) {
       p.season.rounds++;
       week.results.forEach(r => {
@@ -84,7 +151,36 @@
           if (o.pos <= 10) p.season.top10++;
         }
         if (o.pole) p.season.poles++;
+
+        // Evolução dinâmica de teto conquistada na pista
+        if (o.pole) S.attributes.growCap(p, 'RIT', 0.25);
+        if (!o.dnf && (o.grid - o.pos) >= 3) S.attributes.growCap(p, 'RAC', 0.25);
+        if (!o.dnf && r.wet && o.pos <= 3) S.attributes.growCap(p, 'ATE', 0.35);
       });
+
+      // Atualiza confronto direto (H2H) com o companheiro de equipe
+      if (p.h2h) {
+        const qMe = week.quali.indexOf('player');
+        const qMate = week.quali.findIndex(id => id !== 'player' && se.entries[id] && se.entries[id].teamId === p.teamId);
+        if (qMe >= 0 && qMate >= 0) {
+          if (qMe < qMate) p.h2h.qualiW++; else p.h2h.qualiL++;
+        }
+        const mainRes = week.results[week.results.length - 1];
+        if (mainRes) {
+          const rMe = mainRes.order.find(o => o.id === 'player');
+          const rMate = mainRes.order.find(o => o.id !== 'player' && o.teamId === p.teamId);
+          if (rMe && rMate && (!rMe.dnf || !rMate.dnf)) {
+            if (!rMe.dnf && (rMate.dnf || rMe.pos < rMate.pos)) p.h2h.raceW++;
+            else p.h2h.raceL++;
+          }
+        }
+        const tot = p.h2h.raceW + p.h2h.raceL;
+        if (tot >= 4 && !Car.isReserve(p)) {
+          if (p.h2h.raceW >= p.h2h.raceL + 3) p.teamRole = '1º Piloto';
+          else if (p.h2h.raceL >= p.h2h.raceW + 3) p.teamRole = '2º Piloto';
+        }
+      }
+
       if (cat.id === 'f1' && !s.flags.wasF1) {
         s.flags.wasF1 = true;
         S.news.both(`Estreia na F1 em ${cal.circuit.name}!`, 'good');
@@ -94,20 +190,42 @@
       S.pressure.afterRace(s, week);
     } else {
       if (p.injury > 0) p.injury--;
+      if (Car.isReserve(p)) {
+        p.train = Math.min(cfg.trainCap + 2, p.train + 0.08);
+      }
       S.pressure.regen(s);
     }
+
     se.last = { round: se.round, circuit: cal.circuit, week, rest };
     se.round++;
+    se.reserveCallUp = false;
     if (se.round >= se.cal.length) se.finished = true;
+
+    // Se for piloto reserva na F1, sorteia se será convocado para substituir um titular na próxima etapa
+    if (!se.finished && Car.isReserve(p) && R.chance(0.22)) {
+      se.reserveCallUp = true;
+      const nextCirc = se.cal[se.round].circuit;
+      S.news.add(`CONVOCAÇÃO F1: Um titular da ${p.contract.teamName} sentiu mal-estar e você correrá em ${nextCirc.name}!`, 'good');
+    }
+
     S.records.check(s);
     Car.save();
     return week;
   };
 
-  /* Verifica se a próxima etapa em categorias de base (Kart, F4, FREC, F3) é decisiva na disputa de título/pódio. */
-  Car.isTitleDecisiveRound = function (s) {
+  /* Mantém compatibilidade direta com chamadas síncronas e testes automáticos. */
+  Car.playRound = function (choices) {
+    const week = Car.prepareRound(choices);
+    return Car.commitRound(week);
+  };
+
+  /* Verifica se a próxima etapa em categorias de base (Kart, F4, FREC, F3) é um momento-chave. */
+  Car.isKeyJuniorRound = function (s) {
     const se = s.season, cat = C[se.catId];
     if (!se || se.finished || cat.level >= 7) return true;
+    // Parada obrigatória no meio da temporada para escolher foco de desenvolvimento do carro
+    if (se.round === Math.floor(se.cal.length / 2)) return true;
+
     const rem = se.cal.length - se.round;
     if (rem > 2) return false;
     const ranked = S.race.ranked(se);
@@ -119,28 +237,32 @@
     const maxPtsRound = maxPtsPerRace * cat.races.length;
     const gap = Math.max(0, lead.pts - me.pts);
 
-    // Pára na reta final se o piloto estiver no Top 3 ou matematicamente vivo na briga pelo título
-    if (rem === 2 && me.pos <= 2 && gap <= maxPtsRound) return true;
-    if (rem === 1 && (me.pos <= 3 || gap <= maxPtsRound * 1.15)) return true;
+    if (rem === 2 && me.pos <= 3 && gap <= maxPtsRound * 1.2) return true;
+    if (rem === 1 && (me.pos <= 5 || gap <= maxPtsRound * 1.3)) return true;
     return false;
   };
 
-  /* Simula automaticamente as etapas intermediárias nas categorias de base (Kart a F3), parando em decisões de título. */
-  Car.fastForwardJuniorRounds = function (s) {
+  /* Simula etapas até o próximo momento-chave (Meio de temporada / Reta final) na base, ou até convocação como Reserva F1. */
+  Car.fastForwardToMilestone = function (s) {
     const se = s.season, p = s.player, cat = C[se.catId];
-    if (!se || se.finished || cat.level >= 7 || p.noSeat) return null;
+    if (!se || se.finished || p.noSeat) return null;
+
+    const isRes = Car.isReserve(p);
+    if (cat.level >= 7 && !isRes) return null;
 
     const fromRound = se.round + 1;
     const startPts = p.season.points, startWins = p.season.wins, startPod = p.season.podiums;
     let count = 0;
 
     while (!se.finished) {
-      if (Car.isTitleDecisiveRound(s)) break;
+      if (count > 0) {
+        if (isRes && se.reserveCallUp) break;
+        if (!isRes && Car.isKeyJuniorRound(s)) break;
+      }
       const cal = se.cal[se.round];
       const circ = cal.circuit;
       Car.playRound({ tyre: 1, setup: circ.prof, risk: 1, raceInjured: false });
       count++;
-      // aplica desenvolvimento no meio do ano se passar pela metade da temporada
       if (se.round === Math.floor(se.cal.length / 2) && p.devFocus && !p.noSeat) {
         const t = S.world.team(s, se.catId, p.teamId);
         const b = cl((p.engineerRel / 100 * 1.2 + .5) * S.pressure.mult(s, 'dev'), 0, 3);
@@ -154,6 +276,7 @@
     const lead = ranked[0];
     const gap = me && lead ? Math.max(0, lead.pts - me.pts) : 0;
     const toRound = se.round;
+    const isMid = !se.finished && se.round === Math.floor(se.cal.length / 2);
 
     const summary = {
       fromRound,
@@ -164,30 +287,29 @@
       podiums: p.season.podiums - startPod,
       pos: me ? me.pos : '-',
       gap,
-      decisive: !se.finished
+      isMid,
+      callUp: isRes && !!se.reserveCallUp,
+      decisive: !se.finished && !isMid && !isRes
     };
-    const msg = summary.decisive
-      ? `${cat.short}: Etapas ${fromRound} a ${toRound} simuladas (+${summary.pts} pts). Você chega em ${summary.pos}º para a decisão do título!`
-      : `${cat.short}: Etapas ${fromRound} a ${toRound} simuladas (+${summary.pts} pts, ${summary.wins}V, ${summary.podiums}P).`;
-    S.news.add(msg, summary.decisive ? 'good' : '');
+    const msg = summary.callUp
+      ? `F1 Reserva: Etapas ${fromRound} a ${toRound} simuladas no simulador. Você foi convocado para correr a próxima etapa!`
+      : summary.isMid
+        ? `${cat.short}: Meio de temporada (etapas ${fromRound} a ${toRound}, +${summary.pts} pts). Você está em ${summary.pos}º.`
+        : summary.decisive
+          ? `${cat.short}: Etapas ${fromRound} a ${toRound} simuladas (+${summary.pts} pts). Você chega em ${summary.pos}º para a decisão!`
+          : `${cat.short}: Etapas ${fromRound} a ${toRound} simuladas (+${summary.pts} pts, ${summary.wins}V, ${summary.podiums}P).`;
+    S.news.add(msg, (summary.decisive || summary.callUp) ? 'good' : '');
     return summary;
   };
 
-  // depois da etapa: desenvolvimento, simulação rápida da base e eventos
   Car.afterRound = function () {
-    const s = Game.state, p = s.player, se = s.season, out = { events: [], fired: false, simSummary: null };
+    const s = Game.state, p = s.player, se = s.season, out = { events: [], fired: false };
     p.interviewDone = false;
     if (se.round === Math.floor(se.cal.length / 2) && p.devFocus && !p.noSeat) {
       const t = S.world.team(s, se.catId, p.teamId);
       const b = cl((p.engineerRel / 100 * 1.2 + .5) * S.pressure.mult(s, 'dev'), 0, 3);
       if (t) { t.car += b; S.news.add(`Desenvolvimento (${p.devFocus}): o carro da ${t.name} ganhou ${b.toFixed(1)} pontos.`, 'good'); }
     }
-
-    // Nas categorias até F3 (level <= 6), após a 1ª corrida simula etapas intermediárias até decisões de título
-    if (C[se.catId].level <= 6 && se.round === 1 && !se.finished && !p.noSeat) {
-      out.simSummary = Car.fastForwardJuniorRounds(s);
-    }
-
     if (!p.noSeat) out.events = S.pressure.rollEvents(s);
     Car.save();
     return out;
@@ -205,7 +327,8 @@
     const ranked = S.race.ranked(se, true);
     const me = ranked.find(r => r.id === 'player');
     const pos = me ? me.pos : ranked.length, played = p.season.rounds > 0;
-    const champ = !!me && pos === 1 && played;
+    const reserve = Car.isReserve(p);
+    const champ = !!me && pos === 1 && played && !reserve;
 
     ranked.forEach(r => {
       const d = S.world.driver(s, r.id);
@@ -226,6 +349,9 @@
     if (champ) {
       p.stats.titles++;
       p.titlesList.push(cat.id);
+      S.attributes.growCap(p, 'RIT', 0.8);
+      S.attributes.growCap(p, 'RAC', 0.8);
+      S.attributes.growCap(p, 'ATE', 0.5);
       if (cat.id === 'f1') {
         p.f1.titles++;
         if (!p.f1.firstTitleAge) p.f1.firstTitleAge = year - p.birth;
@@ -236,21 +362,27 @@
       }
     }
 
-    if (cat.single && p.season.rounds >= se.cal.length * .8) p.singleSeaterSeasons++;
-    const slPts = played ? S.superlicense.pointsFor(cat.id, pos) : 0;
+    if (cat.single && p.season.rounds >= se.cal.length * .8 && !reserve) p.singleSeaterSeasons++;
+    const slPts = (played && !reserve) ? S.superlicense.pointsFor(cat.id, pos) : 0;
     p.superPoints.push({ year, catId: cat.id, pts: slPts });
     const acct = S.economy.seasonEnd(s);
-    S.news.both(`${year} ${cat.short}: ${played ? pos + 'º lugar, ' + (me ? me.pts : 0) + ' pts' : 'temporada perdida'}${champ ? ' · CAMPEÃO!' : ''}.`, champ ? 'good' : '');
-    p.lastSeason = { pos, champ, pts: me ? me.pts : 0, catId: cat.id, year };
+
+    const statusLine = reserve
+      ? `${year} F1 (Reserva): ${played ? played + ' GP(s) disputado(s), ' + (me ? me.pts : 0) + ' pts' : 'trabalho no simulador'}.`
+      : `${year} ${cat.short}: ${played ? pos + 'º lugar, ' + (me ? me.pts : 0) + ' pts' : 'temporada perdida'}${champ ? ' · CAMPEÃO!' : ''}.`;
+    S.news.both(statusLine, champ ? 'good' : '');
+    p.lastSeason = { pos, champ, pts: me ? me.pts : 0, catId: cat.id, year, reserve };
 
     if (p.contract) { p.contract.years--; if (p.contract.years <= 0) p.contract = null; }
     const nextYear = year + 1, ageNext = nextYear - p.birth;
-    p.forcedUp = cat.level < 8 && (champ || ageNext > cat.maxAge);
+    p.forcedUp = !reserve && cat.level < 8 && (champ || ageNext > cat.maxAge);
     if (p.forcedUp) p.contract = null;
 
     const ef = S.economy.effects(s);
-    p.train = Math.min(cfg.trainCap + 2, p.train + ef.train * S.pressure.mult(s, 'train') + (pos <= 3 ? .3 : .1));
+    const reserveTrainBonus = reserve ? 1.1 : 0;
+    p.train = Math.min(cfg.trainCap + 2, p.train + ef.train * S.pressure.mult(s, 'train') + reserveTrainBonus + (pos <= 3 && !reserve ? .35 : .1));
     p.popularity = cl(p.popularity + ef.pop, 0, 100);
+    if (reserve) p.reputation = cl((p.reputation || 45) + 4, 0, 100);
     p.phys = cl(p.phys + 15, 0, 100); p.mental = cl(p.mental + 15, 0, 100); p.injury = 0;
     if (p.devFocus) p.engineerRel = cl(p.engineerRel + 3, 0, 100);
 
@@ -266,7 +398,7 @@
 
     S.world.rollover(s);
     p.noSeat = false;
-    s.summary = { year, catName: cat.name, pos, champ, pts: me ? me.pts : 0, slPts, acct, debt, played };
+    s.summary = { year, catName: reserve ? 'Fórmula 1 (Piloto Reserva)' : cat.name, pos, champ, pts: me ? me.pts : 0, slPts, acct, debt, played, reserve };
     s.phase = 'offseason';
 
     const end = Car.checkEnd();
