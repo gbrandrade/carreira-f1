@@ -8,28 +8,55 @@
       const s = Game.state, p = s.player, se = s.season, cat = C[p.catId], now = A.playerAttrs(p, s.year), pk = A.playerPeak(p);
       const capEXP = Math.min(99, A.E(28) + pk.EXPb), cap = { RIT: pk.RIT, RAC: pk.RAC, ATE: pk.ATE, EXP: capEXP }, capGer = A.playerCapGer(p);
       const sl = S.superlicense.status(p, s.year);
-      let pos = null, pts = 0; if (se && s.phase === 'season') { const r = S.race.ranked(se).find(x => x.id === 'player'); if (r) { pos = r.pos; pts = r.pts; } }
+      let pos = null, pts = 0;
+      if (se && s.phase === 'season') { const r = S.race.ranked(se).find(x => x.id === 'player'); if (r) { pos = r.pos; pts = r.pts; } }
+
       const stats = h('div', { class: 'statrow' },
         ui.panel({}, ui.stat('GER atual', now.GER, `teto ${capGer}`, null, ui.ring(now.GER, 100, { size: 58, cap: capGer, text: '', color: 'var(--accent)' }))),
         ui.panel({}, ui.stat('Classificação', pos ? pos + 'º' : '—', s.phase === 'season' ? `${pts} pontos · ${cat.short}` : 'fora de temporada', null, ui.plate('trophy', 'var(--gold)', true))),
         ui.panel({}, ui.stat('Superlicença', `${sl.total}/${sl.need}`, sl.eligible ? 'apto para a F1' : `idade ${sl.age}/18 · monopostos ${p.singleSeaterSeasons}/2`, null, ui.ring(sl.total, sl.need, { size: 58, text: '', color: sl.eligible ? 'var(--ok)' : 'var(--warn)' }))),
         ui.panel({}, ui.stat('Caixa', M(p.money), `manutenção ${M(S.economy.upkeep(s))}/ano`, null, ui.plate('wallet', 'var(--ok)', true))));
+
       const radar = ui.panel({ title: 'Atributos', cls: 'marks', right: h('div', { class: 'legend' }, h('span', null, h('i', { style: { background: 'var(--accent)' } }), 'atual'), h('span', null, h('i', { style: { border: '1px dashed var(--text-2)' } }), 'teto')) },
         h('div', { class: 'grow' }, ui.radar(AX, [{ values: [cap.RIT, cap.RAC, cap.ATE, cap.EXP], color: 'var(--text-2)', dashed: true }, { values: [now.RIT, now.RAC, now.ATE, now.EXP] }], { min: 20 })),
         h('div', { class: 'row between' }, ['RIT', 'RAC', 'ATE', 'EXP'].map(k => h('div', { class: 'col gap-s center' }, h('span', { class: 'tiny dim mono' }, k), h('b', { class: 'mono' }, Math.round(now[k]), h('span', { class: 'dim', style: { fontWeight: 400 } }, '/' + Math.round(cap[k])))))));
-      const estado = ui.panel({ title: 'Estado' }, h('div', { class: 'pt', style: { marginTop: '.1rem' } }, 'Pressão'), ui.bar('Equipe', p.pressure.team), ui.bar('Mídia', p.pressure.media), ui.bar('Fãs', p.pressure.fans), ui.bar('Família', p.pressure.family),
-        h('div', { class: 'pt', style: { marginTop: '.4rem' } }, 'Saúde e imagem'), ui.bar('Físico', p.phys), ui.bar('Mente', p.mental), ui.bar('Popular.', p.popularity),
-        h('div', { class: 'grow' }), p.injury > 0 ? ui.badge(`Lesionado · ${p.injury} etapa(s)`, 'bad') : h('div', { class: 'row' }, p.traits.map(id => ui.badge(Game.data.traits.find(t => t.id === id).name))));
+
+      const estado = ui.panel({ title: 'Estado' },
+        h('div', { class: 'pt', style: { marginTop: '.1rem' } }, 'Pressão externa'),
+        ui.bar('Mídia', p.pressure.media),
+        ui.bar('Fãs', p.pressure.fans),
+        ui.bar('Família', p.pressure.family),
+        h('div', { class: 'pt', style: { marginTop: '.4rem' } }, 'Saúde e imagem'),
+        ui.bar('Físico', p.phys),
+        ui.bar('Mente', p.mental),
+        ui.bar('Popular.', p.popularity),
+        h('div', { class: 'grow' }),
+        p.injury > 0 ? ui.badge(`Lesionado · ${p.injury} etapa(s)`, 'bad') : h('div', { class: 'row' }, p.traits.map(id => ui.badge(Game.data.traits.find(t => t.id === id).name)))
+      );
+
       return h('div', { class: 'screen' }, ui.head(`Olá, ${p.name.split(' ')[0]}`, `${cat.name} · ${s.year}${p.contract ? ' · ' + p.contract.teamName : ''}`), stats, h('div', { class: 'hubmid' }, radar, estado, this.next(s)));
     },
     next(s) {
       const p = s.player, se = s.season;
-      let title, sub, btn, art = null, info = null;
+      let title, sub, btn, art = null, info = null, rightTag = null;
       if (s.phase === 'offseason' && !p.contract) { title = 'Fora de temporada'; sub = 'Você precisa de um contrato para disputar o próximo ano.'; btn = ui.btn('Negociar contrato', () => ui.go('contract'), 'primary lg', false, 'doc'); }
       else if (s.phase === 'offseason') { title = `Temporada ${s.year}`; sub = `Contrato assinado com ${p.contract.teamName}.`; btn = ui.btn('Iniciar temporada', () => { S.career.startSeason(); ui.go('hub'); }, 'primary lg', false, 'play'); }
       else if (se.finished) { title = 'Temporada encerrada'; sub = 'Todas as etapas foram disputadas.'; btn = ui.btn('Encerrar temporada', () => ui.finishSeason(), 'primary lg', false, 'check'); }
-      else { const n = se.cal[se.round]; title = n.circuit.name; sub = `Etapa ${n.idx + 1} de ${se.cal.length} · ${U.monthOfWeek(n.week)}${n.sprint ? ' · sprint' : ''}`; art = ui.track(n.circuit.id); info = h('div', { class: 'row' }, ui.badge(n.circuit.rain + '% chuva', n.circuit.rain >= 30 ? 'warn' : ''), ui.ccode(n.circuit.country)); btn = ui.btn('Próxima etapa', () => ui.go('race'), 'primary lg', false, 'flag'); }
-      return ui.panel({ title: 'Próximo passo', cls: 'marks' }, h('div', { class: 'grow' }, art || h('div', { class: 'empty' }, ui.plate('flag', null, true))), h('div', null, h('div', { style: { fontSize: '1.15rem', fontWeight: 650, letterSpacing: '-.02em' } }, title), h('div', { class: 'small mut' }, sub)), info, btn);
+      else {
+        const n = se.cal[se.round];
+        const cat = C[se.catId];
+        title = n.circuit.name;
+        sub = `Etapa ${n.idx + 1} de ${se.cal.length} · ${U.monthOfWeek(n.week)}${n.sprint ? ' · sprint' : ''}`;
+        art = ui.track(n.circuit.id);
+        if (cat.level <= 6 && se.round > 0) rightTag = ui.badge('decisão', 'acc');
+        info = h('div', { class: 'row' }, ui.badge(n.circuit.rain + '% chuva', n.circuit.rain >= 30 ? 'warn' : ''), ui.ccode(n.circuit.country));
+        btn = ui.btn('Próxima etapa', () => ui.go('race'), 'primary lg', false, 'flag');
+      }
+      return ui.panel({ title: 'Próximo passo', cls: 'marks', right: rightTag },
+        art ? h('div', { class: 'track-box' }, art) : h('div', { class: 'grow' }, h('div', { class: 'empty' }, ui.plate('flag', null, true))),
+        h('div', null, h('div', { style: { fontSize: '1.15rem', fontWeight: 650, letterSpacing: '-.02em' } }, title), h('div', { class: 'small mut' }, sub)),
+        info, btn
+      );
     }
   };
 })();
