@@ -18,7 +18,13 @@
     { id: 'billion', name: 'Magnata', desc: 'Acumule US$ 100 milhões', ok: s => s.player.money >= 100e6 },
     { id: 'idol', name: 'Ídolo', desc: 'Chegue a 80 de popularidade', ok: s => s.player.popularity >= 80 },
     { id: 'broke', name: 'Falido', desc: 'Declare falência', ok: s => s.player.bankruptcies >= 1 },
-    { id: 'young', name: 'Prodígio', desc: 'Estreie na F1 com 18 anos ou menos', ok: s => !!s.flags.prodigy }
+    { id: 'young', name: 'Prodígio', desc: 'Estreie na F1 com 18 anos ou menos', ok: s => !!s.flags.prodigy },
+    { id: 'triple_crown', name: 'Tríplice Coroa da F1', desc: 'Vença em Mônaco, Monza e Silverstone na carreira', ok: s => { const w = s.player.wonCircuits || []; return w.includes('mon') && w.includes('ita') && w.includes('gbr'); } },
+    { id: 'crown_jewels', name: 'Lenda dos Circuitos', desc: 'Vença em Mônaco, Monza, Silverstone e Interlagos', ok: s => { const w = s.player.wonCircuits || []; return w.includes('mon') && w.includes('ita') && w.includes('gbr') && w.includes('bra'); } },
+    { id: 'three_teams', name: 'Camaleão Campeão', desc: 'Conquiste títulos de F1 por 3 equipes diferentes', ok: s => (s.player.f1TeamsChamp || []).length >= 3 },
+    { id: 'unbeaten_mate', name: 'Domínio Absoluto', desc: 'Termine uma temporada de F1 invicto contra o companheiro', ok: s => !!s.flags.unbeatenMate },
+    { id: 'team_owner', name: 'Construtor Campeão', desc: 'Funde sua escuderia de F1 e conquiste o título', ok: s => !!(s.player.ownedTeam && s.player.ownedTeam.titleCount >= 1) },
+    { id: 'billionaire', name: 'Bilionário do Paddock', desc: 'Acumule US$ 1 bilhão em caixa', ok: s => s.player.money >= 1e9 }
   ];
   Rec.check = function (s) {
     Rec.achievements.forEach(a => {

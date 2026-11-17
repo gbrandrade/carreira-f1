@@ -3,7 +3,7 @@
   const key = () => Game.config.saveKey;
   Game.core.storage = {
     save(state) { try { localStorage.setItem(key(), JSON.stringify(state)); return true; } catch (e) { return false; } },
-    load() { try { const s = localStorage.getItem(key()); return s ? JSON.parse(s) : null; } catch (e) { return null; } },
+    load() { try { const s = localStorage.getItem(key()); const st = s ? JSON.parse(s) : null; if (st && Game.systems && Game.systems.owner) Game.systems.owner.syncCustomTeam(st); return st; } catch (e) { return null; } },
     has() { try { return !!localStorage.getItem(key()); } catch (e) { return false; } },
     clear() { try { localStorage.removeItem(key()); } catch (e) {} },
     exportFile(state) {

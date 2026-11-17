@@ -243,7 +243,8 @@
       else if (!s.offers.length) right = ui.panel({ title: 'Ofertas', cls: 'grow' }, h('div', { class: 'empty' }, ui.plate('lock', null, true), h('div', null, c ? 'Seu contrato continua válido. Sem cláusula de saída, não há ofertas de outras equipes.' : 'Nenhuma oferta disponível.')));
       else right = ui.panel({ title: `Ofertas para ${s.year}`, right: p.forcedUp ? ui.badge('você precisa subir de categoria', 'warn') : null }, ui.paged('offers', s.offers, 3, items => items.map(o => offerCard(o, s))));
 
-      const cta = s.phase === 'offseason' && c ? ui.panel({ cls: 'cta' }, h('div', { class: 'msg' }, 'Contrato assinado com ', h('b', null, c.teamName), '.'), ui.btn(`Iniciar temporada ${s.year}`, () => { S.career.startSeason(); ui.go('hub'); }, 'primary lg', false, 'play')) : null;
+      const isBoss = S.owner && S.owner.isBossOnly(p);
+      const cta = s.phase === 'offseason' && (c || isBoss) ? ui.panel({ cls: 'cta' }, h('div', { class: 'msg' }, isBoss ? 'Modo Chefe de Equipe ativo na ' : 'Contrato assinado com ', h('b', null, isBoss ? p.ownedTeam.name : c.teamName), '.'), ui.btn(`Iniciar temporada ${s.year}`, () => { S.career.startSeason(); ui.go('hub'); }, 'primary lg', false, 'play')) : null;
       return h('div', { class: 'screen' }, ui.head('Contrato', s.phase === 'offseason' ? `Entressafra ${s.year}` : 'Temporada em andamento'), h('div', { class: 'cols-2-3' }, cur, right), cta);
     }
   };

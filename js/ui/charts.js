@@ -4,169 +4,161 @@
   let gid = 0;
   const svgWrap = (cls, html) => h('div', { class: 'chart ' + (cls || ''), html });
 
-  /* Traçados 1:1 de alta fidelidade dos 32 circuitos reais (auto-normalizados com preservação de proporção).
-     pts = vértices reais do traçado (primeiro segmento = reta principal / largada);
-     drs = índices dos segmentos de reta com zona de DRS;
-     s1, s2 = índices de divisão dos setores 1, 2 e 3. */
+  /* Traçados 1:1 de alta fidelidade dos circuitos oficiais (F1, F2, F3, F4 e Kart),
+     auto-normalizados preservando proporção exata, ângulos, hairpins, chicanes, setores e zonas de DRS. */
   const TRACKS = {
-    // 1. Albert Park (Melbourne) - sentido horário
-    aus: {
-      pts: [[18,72],[14,48],[18,45],[22,48],[26,24],[34,20],[40,26],[46,24],[58,18],[74,22],[84,34],[88,48],[82,56],[74,52],[68,62],[76,72],[68,80],[54,74],[42,78],[30,76]],
-      drs: [0, 3, 7, 17], s1: 5, s2: 12
-    },
-    // 2. Xangai (Shanghai) - reta oposta gigantesca + caracol T1-T3
-    chn: {
-      pts: [[34,68],[56,52],[62,48],[60,42],[52,44],[54,52],[46,56],[36,48],[38,34],[48,26],[64,22],[86,20],[88,24],[44,74],[48,80],[36,80],[26,74]],
-      drs: [0, 12], s1: 6, s2: 12
-    },
-    // 3. Suzuka - formato em 8 único, Essos, Degner, Hairpin, Spoon, 130R e Chicane
-    jpn: {
-      pts: [[72,56],[88,44],[86,38],[78,40],[74,34],[68,36],[64,30],[58,34],[54,28],[48,24],[44,30],[48,38],[42,46],[36,42],[34,48],[42,56],[34,66],[22,74],[14,72],[16,64],[26,60],[44,54],[58,64],[64,62],[66,66]],
-      drs: [0], s1: 9, s2: 18
-    },
-    // 4. Sakhir (Bahrein) - 4 longas retas e hairpins fechados
+    // 1. Sakhir (Bahrain International)
     bhr: {
-      pts: [[26,78],[26,22],[32,20],[38,34],[48,36],[62,24],[72,26],[68,38],[54,44],[56,52],[74,50],[78,56],[60,62],[52,58],[48,66],[66,74],[62,80],[38,76],[32,80]],
-      drs: [0, 4, 14], s1: 5, s2: 12
+      pts: [[88,84],[18,84],[26,20],[32,20],[46,56],[30,56],[30,60],[56,54],[66,22],[72,22],[62,48],[74,54],[72,60],[58,64],[64,72],[88,80]],
+      drs: [0, 1, 7], s1: 5, s2: 11
     },
-    // 5. Jeddah Corniche - circuito urbano ultra rápido à beira-mar
+    // 2. Jeddah Corniche
     ksa: {
-      pts: [[26,84],[22,68],[26,64],[22,56],[26,46],[20,34],[24,22],[28,16],[34,18],[32,28],[38,38],[44,48],[52,58],[62,68],[74,76],[82,82],[76,86],[64,78],[54,70],[46,74],[38,82]],
-      drs: [0, 12, 16], s1: 7, s2: 14
+      pts: [[20,78],[80,18],[88,16],[86,22],[74,36],[64,42],[56,52],[50,54],[44,64],[38,66],[32,74],[22,86],[16,84]],
+      drs: [0, 4, 9], s1: 4, s2: 9
     },
-    // 6. Miami International Autodrome - retas longas + setor travado sob viaduto
+    // 3. Albert Park (Melbourne)
+    aus: {
+      pts: [[18,68],[16,44],[22,42],[20,34],[28,22],[42,22],[48,34],[62,36],[76,36],[84,44],[88,48],[74,56],[66,52],[56,58],[38,60],[28,68]],
+      drs: [0, 6, 13], s1: 5, s2: 10
+    },
+    // 4. Suzuka (traçado em 8)
+    jpn: {
+      pts: [[72,34],[54,48],[58,52],[52,54],[54,58],[48,60],[42,54],[36,56],[34,64],[38,66],[34,72],[28,68],[14,72],[10,68],[16,62],[44,50],[66,32],[76,26],[86,26],[88,30],[80,32],[76,30]],
+      drs: [0], s1: 8, s2: 15
+    },
+    // 5. Shanghai (Xangai)
+    chn: {
+      pts: [[20,76],[84,76],[88,72],[82,68],[52,70],[40,56],[68,52],[72,46],[50,44],[46,34],[52,20],[62,22],[60,30],[52,28],[54,24],[44,26],[28,70]],
+      drs: [0, 15], s1: 6, s2: 11
+    },
+    // 6. Miami International Autodrome
     mia: {
-      pts: [[20,66],[22,48],[32,42],[44,44],[54,36],[62,26],[70,26],[68,34],[62,38],[64,44],[78,44],[88,48],[86,54],[56,64],[52,70],[42,68],[30,70]],
-      drs: [0, 12], s1: 6, s2: 12
+      pts: [[22,34],[74,34],[86,38],[88,44],[72,46],[64,54],[58,66],[42,66],[34,56],[22,58],[16,52],[26,48],[18,38]],
+      drs: [0, 4], s1: 4, s2: 8
     },
-    // 7. Montreal (Circuit Gilles Villeneuve) - ilha longa, hairpins e Muro dos Campeões
+    // 7. Montreal (Circuit Gilles Villeneuve)
     can: {
-      pts: [[16,66],[22,56],[18,48],[28,44],[40,46],[46,42],[56,44],[68,36],[84,24],[88,28],[74,42],[58,52],[42,58],[28,64],[24,62],[20,68]],
-      drs: [0, 7, 9], s1: 5, s2: 10
+      pts: [[24,38],[16,32],[20,26],[28,26],[42,32],[52,38],[64,46],[76,56],[88,70],[84,74],[62,60],[42,48]],
+      drs: [0, 7, 10], s1: 4, s2: 8
     },
-    // 8. Mônaco (Monte Carlo) - Sainte-Dévote, Casino, Mirabeau, Loews Hairpin, Túnel, Chicane, Piscina, Rascasse
+    // 8. Mônaco (Monte Carlo)
     mon: {
-      pts: [[22,74],[24,48],[34,34],[42,24],[52,22],[56,28],[50,32],[58,36],[64,32],[74,26],[86,28],[84,34],[66,42],[62,48],[54,48],[48,54],[44,58],[40,56],[36,64],[32,72],[28,76]],
+      pts: [[22,74],[20,52],[22,46],[32,36],[44,36],[44,42],[38,44],[46,46],[54,46],[68,38],[84,38],[86,42],[74,44],[68,48],[54,48],[46,50],[38,50],[26,54],[24,62],[26,72]],
       drs: [0], s1: 6, s2: 13
     },
-    // 9. Barcelona-Catalunya - reta principal longa, Elf, Campsa e últimas curvas rápidas
-    esp: {
-      pts: [[22,68],[24,36],[30,32],[34,36],[46,30],[58,32],[62,42],[54,48],[56,54],[72,52],[82,56],[80,68],[66,72],[58,64],[50,66],[44,72],[30,72]],
-      drs: [0, 8], s1: 5, s2: 11
+    // 9. Portimão (Autódromo Internacional do Algarve)
+    por: {
+      pts: [[22,32],[74,32],[86,38],[88,46],[78,52],[76,44],[66,44],[62,52],[46,52],[42,44],[32,42],[28,50],[36,58],[26,66],[16,56],[16,38]],
+      drs: [0], s1: 5, s2: 10
     },
-    // 10. Red Bull Ring (Spielberg) - 3 retas em aclive/declive e curvas angulares
+    // 10. Silverstone
+    gbr: {
+      pts: [[16,32],[24,24],[38,24],[42,32],[34,38],[52,24],[60,26],[54,36],[66,36],[74,44],[82,44],[86,52],[64,72],[54,74],[46,66],[36,58],[24,44]],
+      drs: [0, 5, 11], s1: 6, s2: 11
+    },
+    // 11. Red Bull Ring (Spielberg)
     aut: {
-      pts: [[22,72],[26,28],[32,24],[66,22],[72,26],[56,42],[62,48],[78,48],[84,54],[74,68],[56,74],[40,70]],
+      pts: [[28,56],[16,34],[22,28],[76,26],[82,30],[52,48],[56,54],[76,52],[84,58],[74,68],[52,72],[36,64]],
       drs: [0, 2, 4], s1: 3, s2: 7
     },
-    // 11. Silverstone - Hamilton Straight, Abbey, Loop, Wellington, Brooklands, Copse, Maggotts-Becketts, Stowe
-    gbr: {
-      pts: [[34,74],[24,62],[28,54],[36,56],[34,48],[22,34],[26,24],[38,26],[46,34],[54,24],[68,22],[74,28],[70,38],[76,44],[72,50],[78,56],[74,66],[56,68],[48,62],[42,74]],
-      drs: [0, 5, 15], s1: 6, s2: 13
-    },
-    // 12. Spa-Francorchamps - La Source, Eau Rouge/Raidillon, Kemmel, Les Combes, Pouhon, Blanchimont, Bus Stop
+    // 12. Spa-Francorchamps
     bel: {
       pts: [[32,76],[20,66],[26,58],[34,46],[46,24],[52,22],[56,28],[64,26],[70,34],[60,42],[66,50],[78,50],[84,58],[74,68],[58,68],[44,72],[38,76],[36,72]],
       drs: [0, 3], s1: 5, s2: 12
     },
-    // 13. Hungaroring - travado e técnico
-    hun: {
-      pts: [[24,76],[24,34],[32,30],[42,42],[48,38],[46,26],[54,22],[64,28],[62,38],[72,42],[78,50],[68,58],[56,56],[54,64],[66,70],[62,76],[36,76]],
-      drs: [0, 1], s1: 5, s2: 11
+    // 13. Barcelona-Catalunya
+    esp: {
+      pts: [[22,68],[24,36],[30,32],[34,36],[46,30],[58,32],[62,42],[54,48],[56,54],[72,52],[82,56],[80,68],[66,72],[58,64],[50,66],[44,72],[30,72]],
+      drs: [0, 8], s1: 5, s2: 11
     },
-    // 14. Zandvoort - Tarzan, Hugenholtz, Scheivlak, curvas inclinadas
+    // 14. Zandvoort
     ned: {
       pts: [[28,74],[24,42],[30,36],[36,44],[42,32],[50,24],[62,28],[60,38],[68,42],[76,34],[82,42],[78,58],[66,64],[54,60],[44,68],[36,76]],
       drs: [0, 13], s1: 5, s2: 10
     },
-    // 15. Monza - Templo da Velocidade (retas longas + 3 chicanes + Lesmos + Ascari + Parabolica)
+    // 15. Hungaroring
+    hun: {
+      pts: [[36,66],[22,46],[26,42],[44,52],[50,44],[46,32],[56,24],[68,28],[76,42],[70,56],[56,60],[54,68],[62,74],[52,78],[40,68]],
+      drs: [0, 1], s1: 5, s2: 10
+    },
+    // 16. Monza (Templo da Velocidade)
     ita: {
-      pts: [[22,74],[22,26],[26,24],[28,28],[44,24],[54,28],[58,36],[68,42],[78,46],[82,52],[76,62],[62,68],[42,74]],
-      drs: [0, 7, 11], s1: 4, s2: 8
+      pts: [[26,56],[18,26],[22,24],[26,28],[34,42],[40,50],[44,52],[54,54],[62,56],[78,58],[88,62],[86,68],[54,68],[34,64]],
+      drs: [0, 8, 12], s1: 4, s2: 9
     },
-    // 16. Madrid (Madring) - traçado híbrido rápido com curva parabólica inclinada
+    // 17. Madrid (Madring)
     mad: {
-      pts: [[22,68],[24,38],[34,26],[52,24],[68,28],[78,40],[74,52],[60,50],[56,58],[68,68],[56,76],[38,72],[28,74]],
-      drs: [0, 3, 10], s1: 4, s2: 8
+      pts: [[22,74],[18,42],[26,38],[34,34],[44,34],[52,28],[62,28],[68,24],[78,26],[86,34],[82,46],[66,50],[62,60],[48,62],[44,70],[28,76]],
+      drs: [0, 8, 13], s1: 5, s2: 11
     },
-    // 17. Baku - retas de 90 graus na cidade + seção estreita do castelo + reta de 2,2km
+    // 18. Baku City
     aze: {
-      pts: [[20,76],[20,56],[36,56],[36,38],[54,38],[54,22],[68,22],[68,36],[78,36],[82,46],[76,56],[72,66],[56,74],[36,76]],
-      drs: [0, 1, 12], s1: 4, s2: 9
+      pts: [[26,74],[86,32],[88,38],[80,46],[62,54],[48,58],[42,54],[36,58],[32,66],[22,60],[14,66],[18,76]],
+      drs: [0, 3], s1: 4, s2: 8
     },
-    // 18. Singapura (Marina Bay) - circuito urbano de 90° à beira da baía
+    // 19. Istanbul Park
+    tur: {
+      pts: [[20,46],[16,40],[26,36],[36,42],[48,42],[62,34],[76,36],[86,44],[88,52],[74,58],[68,52],[60,62],[46,56],[34,50]],
+      drs: [0, 6], s1: 4, s2: 9
+    },
+    // 20. Marina Bay (Singapura)
     sgp: {
-      pts: [[22,68],[22,46],[30,42],[36,46],[36,32],[46,24],[64,24],[64,38],[76,38],[82,46],[82,62],[70,62],[70,70],[54,70],[48,76],[32,76]],
-      drs: [0, 5, 13], s1: 5, s2: 10
+      pts: [[28,42],[16,54],[22,60],[36,48],[46,42],[66,42],[68,52],[84,52],[88,62],[76,66],[56,64],[48,66],[38,60],[32,46]],
+      drs: [0, 4, 10], s1: 5, s2: 9
     },
-    // 19. Austin (COTA) - subida íngreme T1, sequência de Essos, reta oposta longa e estádio
+    // 21. Circuit of the Americas (Austin)
     usa: {
-      pts: [[22,68],[22,26],[28,32],[34,28],[40,36],[46,32],[52,40],[58,36],[64,44],[84,32],[86,38],[68,54],[62,52],[58,60],[68,68],[62,74],[46,72],[38,66],[30,70]],
-      drs: [0, 8], s1: 7, s2: 12
+      pts: [[38,74],[14,56],[24,52],[30,56],[36,48],[42,52],[48,44],[54,48],[86,32],[88,36],[74,44],[70,52],[60,50],[56,58],[46,60],[42,70]],
+      drs: [0, 7], s1: 6, s2: 10
     },
-    // 20. Cidade do México (Hermanos Rodríguez) - reta gigantesca + Foro Sol
+    // 22. Cidade do México (Hermanos Rodríguez)
     mex: {
-      pts: [[22,72],[22,26],[28,24],[32,30],[44,26],[48,38],[58,36],[66,44],[76,52],[80,64],[68,72],[62,64],[56,64],[52,72],[36,74]],
-      drs: [0, 3, 13], s1: 4, s2: 9
+      pts: [[18,64],[72,32],[76,36],[72,42],[78,52],[64,56],[56,62],[46,60],[68,66],[74,74],[66,76],[62,68],[44,64],[24,68]],
+      drs: [0, 3, 12], s1: 4, s2: 9
     },
-    // 21. Interlagos (São Paulo) - S do Senna, Curva do Sol, Reta Oposta, Descida do Lago, Miolo, Junção e Subida dos Boxes
+    // 23. Interlagos (São Paulo)
     bra: {
-      pts: [[34,76],[20,56],[26,48],[22,38],[34,24],[52,22],[76,28],[82,38],[70,48],[56,46],[52,38],[44,44],[48,54],[62,58],[58,66],[44,72]],
-      drs: [0, 5], s1: 5, s2: 11
+      pts: [[46,76],[24,64],[16,46],[20,40],[26,42],[26,34],[40,26],[74,26],[84,34],[78,46],[62,46],[52,38],[44,44],[48,54],[66,58],[64,66],[52,72]],
+      drs: [0, 6], s1: 5, s2: 11
     },
-    // 22. Las Vegas Strip - longas retas de alta velocidade e chicanes
+    // 24. Las Vegas Strip
     lvs: {
-      pts: [[22,68],[24,44],[36,36],[38,24],[52,24],[82,26],[84,36],[72,48],[78,66],[72,74],[46,72],[32,74]],
-      drs: [4, 9], s1: 4, s2: 7
+      pts: [[22,72],[84,72],[88,66],[84,44],[62,44],[44,48],[34,42],[32,28],[24,28],[24,48],[16,54],[18,68]],
+      drs: [0, 3], s1: 4, s2: 8
     },
-    // 23. Lusail (Qatar) - curvas fluidas de média/alta velocidade e reta longa
+    // 25. Lusail (Qatar)
     qat: {
-      pts: [[24,74],[24,26],[34,24],[42,34],[54,28],[64,34],[76,28],[82,36],[74,48],[64,46],[62,56],[74,64],[68,74],[48,70],[36,76]],
-      drs: [0], s1: 5, s2: 10
+      pts: [[74,76],[60,26],[54,24],[48,44],[40,44],[38,28],[28,28],[26,48],[16,56],[18,66],[30,62],[26,74],[44,76]],
+      drs: [0], s1: 4, s2: 9
     },
-    // 24. Yas Marina (Abu Dhabi) - hairpins, retas longas e setor do hotel
+    // 26. Yas Marina (Abu Dhabi)
     abu: {
-      pts: [[26,74],[22,44],[30,36],[36,24],[46,24],[66,30],[82,38],[80,44],[62,50],[66,58],[78,62],[74,72],[60,74],[54,66],[44,68],[36,76]],
-      drs: [4, 7], s1: 5, s2: 10
+      pts: [[16,66],[22,44],[34,34],[38,30],[44,34],[64,48],[82,58],[80,62],[64,62],[52,62],[48,52],[38,52],[36,64],[22,68]],
+      drs: [4, 7], s1: 5, s2: 9
     },
 
-    // ---- 8 Circuitos Reservas ----
-    // 25. Ímola - Tamburello, Villeneuve, Tosa, Piratella, Acque Minerali, Variante Alta, Rivazza
+    // ---- Demais Circuitos Reservas ----
     imo: {
       pts: [[20,66],[28,54],[36,44],[44,32],[54,26],[64,30],[62,38],[72,42],[82,38],[84,48],[74,56],[64,54],[56,64],[44,70],[30,70]],
       drs: [0], s1: 5, s2: 10
     },
-    // 26. Portimão (Algarve) - montanha-russa técnica
-    por: {
-      pts: [[24,72],[24,32],[34,24],[46,32],[56,26],[66,34],[78,30],[82,42],[70,52],[58,48],[54,58],[66,66],[56,74],[38,74]],
-      drs: [0], s1: 4, s2: 9
-    },
-    // 27. Paul Ricard - Reta Mistral dividida por chicane e Signes
     fra: {
       pts: [[20,66],[22,38],[34,34],[42,26],[60,26],[64,30],[68,26],[84,28],[84,42],[68,48],[76,62],[62,72],[44,66],[32,72]],
       drs: [0, 3, 6], s1: 4, s2: 9
     },
-    // 28. Hockenheim - Parabolika e Motodrom
     ger: {
       pts: [[24,74],[24,38],[38,24],[62,24],[82,30],[78,42],[64,48],[60,56],[72,62],[68,72],[52,70],[40,76]],
       drs: [0, 3], s1: 4, s2: 8
     },
-    // 29. Istambul Park - Curva 8 de 4 ápices + reta oposta
-    tur: {
-      pts: [[24,72],[22,48],[32,36],[46,24],[56,26],[62,36],[54,44],[62,52],[82,48],[84,58],[70,68],[50,74],[36,70]],
-      drs: [0, 7], s1: 4, s2: 8
-    },
-    // 30. Mugello - San Donato, Casanova-Savelli, Arrabbiata 1 & 2, Bucine
     mug: {
       pts: [[22,68],[24,28],[34,24],[44,34],[54,28],[64,38],[76,32],[82,44],[74,58],[62,56],[54,66],[40,74],[28,72]],
       drs: [0], s1: 4, s2: 8
     },
-    // 31. Sepang (Malásia) - duas retas paralelas ligadas por hairpin
     mal: {
       pts: [[24,74],[24,28],[34,26],[42,38],[56,34],[68,42],[82,32],[84,40],[62,58],[52,52],[44,62],[58,72],[44,76]],
       drs: [0, 7], s1: 4, s2: 8
     },
-    // 32. Kyalami (África do Sul)
     rsa: {
       pts: [[24,68],[22,36],[34,24],[54,26],[72,34],[80,48],[72,62],[58,56],[48,66],[36,74]],
       drs: [0], s1: 3, s2: 6
@@ -181,12 +173,12 @@
     br4: { pts: [[22,66],[26,34],[52,24],[78,36],[74,66],[42,72]], drs: [], s1: 2, s2: 4 },
     br5: { pts: [[24,70],[22,40],[38,24],[56,32],[74,26],[78,48],[62,68],[40,72]], drs: [], s1: 3, s2: 5 },
     'menu-art': {
-      pts: [[34,76],[20,56],[26,48],[22,38],[34,24],[52,22],[76,28],[82,38],[70,48],[56,46],[52,38],[44,44],[48,54],[62,58],[58,66],[44,72]],
-      drs: [0, 5], s1: 5, s2: 11
+      pts: [[46,76],[24,64],[16,46],[20,40],[26,42],[26,34],[40,26],[74,26],[84,34],[78,46],[62,46],[52,38],[44,44],[48,54],[66,58],[64,66],[52,72]],
+      drs: [0, 6], s1: 5, s2: 11
     }
   };
 
-  /* Normaliza pontos para caberem com margem segura [16..84] preservando a proporção exata do circuito. */
+  /* Normaliza pontos para caberem com margem segura [14..86] preservando a proporção exata do circuito. */
   function normalizePts(rawPts) {
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     rawPts.forEach(([x, y]) => {
@@ -195,14 +187,14 @@
     });
     const w = Math.max(1, maxX - minX);
     const h = Math.max(1, maxY - minY);
-    const box = 68; // de 16 a 84
+    const box = 72; // de 14 a 86
     const scale = box / Math.max(w, h);
     const ox = 50 - (w * scale) / 2;
     const oy = 50 - (h * scale) / 2;
     return rawPts.map(([x, y]) => [ox + (x - minX) * scale, oy + (y - minY) * scale]);
   }
 
-  /* Constrói path SVG com retas fiéis e curvas suaves nos ápices (chamfer + quadratic Bézier). */
+  /* Constrói path SVG com retas nítidas e curvas precisas nos ápices (preserva hairpins e chicanes 1:1). */
   function roundedPolyPath(P, radius) {
     const N = P.length;
     if (N < 3) return '';
@@ -215,7 +207,7 @@
       const v2x = next[0] - curr[0], v2y = next[1] - curr[1];
       const l1 = Math.hypot(v1x, v1y) || 1;
       const l2 = Math.hypot(v2x, v2y) || 1;
-      const r = Math.min(radius, l1 * 0.36, l2 * 0.36);
+      const r = Math.min(radius, l1 * 0.34, l2 * 0.34);
       const pA = [curr[0] + (v1x / l1) * r, curr[1] + (v1y / l1) * r];
       const pB = [curr[0] + (v2x / l2) * r, curr[1] + (v2y / l2) * r];
       if (i === 0) d += `M${pA[0].toFixed(2)},${pA[1].toFixed(2)}`;
@@ -324,7 +316,7 @@
 
     const P = normalizePts(rawPts);
     const N = P.length;
-    const d = roundedPolyPath(P, 2.8);
+    const d = roundedPolyPath(P, 1.8);
 
     // Retas DRS em destaque paralelo sutil
     let drsSvg = '';
@@ -333,10 +325,10 @@
       const a = P[idx], b = P[(idx + 1) % N];
       const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy) || 1;
       const ux = dx / len, uy = dy / len;
-      const nx = -uy * 2.5, ny = ux * 2.5;
+      const nx = -uy * 2.4, ny = ux * 2.4;
       const p1x = a[0] + ux * (len * 0.14) + nx, p1y = a[1] + uy * (len * 0.14) + ny;
       const p2x = b[0] - ux * (len * 0.14) + nx, p2y = b[1] - uy * (len * 0.14) + ny;
-      drsSvg += `<line x1="${p1x.toFixed(1)}" y1="${p1y.toFixed(1)}" x2="${p2x.toFixed(1)}" y2="${p2y.toFixed(1)}" stroke="var(--ok)" stroke-width="0.95" stroke-dasharray="1.8 1.4" stroke-linecap="round" opacity="0.85"/>`;
+      drsSvg += `<line x1="${p1x.toFixed(1)}" y1="${p1y.toFixed(1)}" x2="${p2x.toFixed(1)}" y2="${p2y.toFixed(1)}" stroke="var(--ok)" stroke-width="0.95" stroke-dasharray="1.8 1.4" stroke-linecap="round" opacity="0.88"/>`;
     });
 
     // Marcadores de divisão dos setores S1 e S2
@@ -345,24 +337,24 @@
       if (idx == null || idx <= 0 || idx >= N) return;
       const curr = P[idx], next = P[(idx + 1) % N];
       const dx = next[0] - curr[0], dy = next[1] - curr[1], len = Math.hypot(dx, dy) || 1;
-      const nx = -dy / len * 2.6, ny = dx / len * 2.6;
+      const nx = -dy / len * 2.4, ny = dx / len * 2.4;
       secSvg += `<line x1="${(curr[0] - nx).toFixed(1)}" y1="${(curr[1] - ny).toFixed(1)}" x2="${(curr[0] + nx).toFixed(1)}" y2="${(curr[1] + ny).toFixed(1)}" stroke="var(--text-3)" stroke-width="0.9"/>`;
-      secSvg += `<text x="${(curr[0] + nx * 2.1).toFixed(1)}" y="${(curr[1] + ny * 2.1 + 1.5).toFixed(1)}" text-anchor="middle" font-size="3.6" font-family="var(--mono)" fill="var(--text-3)">S${si + 2}</text>`;
+      secSvg += `<text x="${(curr[0] + nx * 2.1).toFixed(1)}" y="${(curr[1] + ny * 2.1 + 1.4).toFixed(1)}" text-anchor="middle" font-size="3.5" font-family="var(--mono)" fill="var(--text-3)">S${si + 2}</text>`;
     });
 
     // Linha de largada/chegada no meio da reta principal (segmento P[0] -> P[1]) e seta de sentido
     const p0 = P[0], p1 = P[1];
     const sdx = p1[0] - p0[0], sdy = p1[1] - p0[1], slen = Math.hypot(sdx, sdy) || 1;
     const ux = sdx / slen, uy = sdy / slen;
-    const nx = -uy * 3.2, ny = ux * 3.2;
+    const nx = -uy * 3.0, ny = ux * 3.0;
     const sfX = p0[0] + sdx * 0.42, sfY = p0[1] + sdy * 0.42;
-    const arrX = sfX + ux * 4.5, arrY = sfY + uy * 4.5;
-    const arrowPts = `${(arrX + ux * 2.2).toFixed(1)},${(arrY + uy * 2.2).toFixed(1)} ${(arrX - ux * 1.2 - uy * 1.5).toFixed(1)},${(arrY - uy * 1.2 + ux * 1.5).toFixed(1)} ${(arrX - ux * 1.2 + uy * 1.5).toFixed(1)},${(arrY - uy * 1.2 - ux * 1.5).toFixed(1)}`;
+    const arrX = sfX + ux * 4.2, arrY = sfY + uy * 4.2;
+    const arrowPts = `${(arrX + ux * 2.0).toFixed(1)},${(arrY + uy * 2.0).toFixed(1)} ${(arrX - ux * 1.1 - uy * 1.4).toFixed(1)},${(arrY - uy * 1.1 + ux * 1.4).toFixed(1)} ${(arrX - ux * 1.1 + uy * 1.4).toFixed(1)},${(arrY - uy * 1.1 - ux * 1.4).toFixed(1)}`;
 
     const s = `<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;max-width:100%;max-height:100%;display:block">
-      <path d="${d}" fill="none" stroke="var(--line-strong)" stroke-width="4.4" stroke-linejoin="round" stroke-linecap="round"/>
-      <path d="${d}" fill="none" stroke="var(--surface-2)" stroke-width="2.9" stroke-linejoin="round" stroke-linecap="round"/>
-      <path d="${d}" fill="none" stroke="var(--accent)" stroke-width="0.85" stroke-opacity="0.7" stroke-linejoin="round"/>
+      <path d="${d}" fill="none" stroke="var(--line-strong)" stroke-width="3.8" stroke-linejoin="round" stroke-linecap="round"/>
+      <path d="${d}" fill="none" stroke="var(--surface-2)" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+      <path d="${d}" fill="none" stroke="var(--accent)" stroke-width="0.9" stroke-opacity="0.8" stroke-linejoin="round"/>
       ${drsSvg}
       ${secSvg}
       <line x1="${(sfX - nx).toFixed(1)}" y1="${(sfY - ny).toFixed(1)}" x2="${(sfX + nx).toFixed(1)}" y2="${(sfY + ny).toFixed(1)}" stroke="var(--text)" stroke-width="1.5" stroke-linecap="round"/>

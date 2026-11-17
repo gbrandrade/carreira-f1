@@ -4,9 +4,9 @@
   ui.current = 'menu';
   ui.fullScreens = ['menu', 'creation', 'ending'];
   const NAV = [['Jogo', [['hub', 'Central', 'home'], ['season', 'Temporada', 'calendar'], ['race', 'Corrida', 'flag']]],
-    ['Carreira', [['contract', 'Contrato', 'doc'], ['assets', 'Patrimônio', 'wallet'], ['people', 'Pessoas e mídia', 'users']]],
+    ['Carreira', [['contract', 'Contrato', 'doc'], ['team', 'Escuderia', 'shield'], ['assets', 'Patrimônio', 'wallet'], ['people', 'Pessoas e mídia', 'users']]],
     ['Mundo', [['drivers', 'Pilotos', 'table'], ['records', 'Recordes', 'trophy'], ['career', 'Carreira', 'clock']]]];
-  const TITLES = { hub: 'Central do piloto', season: 'Temporada', race: 'Corrida', contract: 'Contrato', assets: 'Patrimônio', people: 'Pessoas e mídia', drivers: 'Pilotos', records: 'Recordes', career: 'Carreira' };
+  const TITLES = { hub: 'Central do piloto', season: 'Temporada', race: 'Corrida', contract: 'Contrato', team: 'Minha Escuderia', assets: 'Patrimônio', people: 'Pessoas e mídia', drivers: 'Pilotos', records: 'Recordes', career: 'Carreira' };
 
   // ---- temas (guardados à parte do save)
   ui.prefs = { theme: 'dark', accent: 'red' };
@@ -28,8 +28,9 @@
 
   function feedTag(txt) {
     const t = String(txt || '');
+    if (/^BREAKING|^BOMBA|^OFICIAL|^DANÇA|^FIM DE UMA ERA/.test(t)) return 'BREAKING';
     if (/^F1\b|F1:|CONVOCAÇÃO F1|Estreia na F1|era técnica/.test(t)) return 'F1';
-    if (/Contrato|oferta|academia|Reserva/.test(t)) return 'CONTRATO';
+    if (/Contrato|oferta|academia|Reserva|ACADEMIA|DEMITIDO/.test(t)) return 'CONTRATO';
     if (/Patrocínio|FALÊNCIA|US\$|Investimento/.test(t)) return 'FINANÇAS';
     if (/Conquista|CAMPEÃO|superlicença/.test(t)) return 'MARCO';
     if (/Desenvolvimento/.test(t)) return 'TÉCNICO';

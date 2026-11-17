@@ -11,7 +11,15 @@
     const a = e.attrs;
     return m === 'q' ? a.RIT * .78 + a.EXP * .08 + a.ATE * .14 : a.RIT * .5 + a.RAC * .28 + a.ATE * .12 + a.EXP * .10;
   };
-  const perf = (e, cat, m) => cat.carW * e.car + (1 - cat.carW) * drvScore(e, m);
+  const carPartScore = (e, circ, m) => {
+    const pt = e.parts;
+    if (!pt) return e.car;
+    if (m === 'q') return 0.45 * pt.quali + 0.30 * pt.aero + 0.25 * pt.power;
+    if (circ && circ.prof === 'dw') return 0.42 * pt.aero + 0.26 * pt.chassis + 0.20 * pt.power + 0.12 * pt.quali;
+    if (circ && circ.prof === 'pw') return 0.44 * pt.power + 0.26 * pt.aero + 0.18 * pt.chassis + 0.12 * pt.quali;
+    return 0.34 * pt.aero + 0.32 * pt.power + 0.22 * pt.chassis + 0.12 * pt.quali;
+  };
+  const perf = (e, cat, m, circ) => cat.carW * carPartScore(e, circ, m) + (1 - cat.carW) * drvScore(e, m);
 
   const setupBonus = (s, circ, wet, isQuali) => {
     if (!s) return 0;
@@ -62,12 +70,12 @@
     const riskQ = ch.risk === 2 ? 1.1 : ch.risk === 0 ? -0.8 : 0;
     return entries.map(e => ({
       id: e.id,
-      v: perf(e, cat, 'q') + R.normal(0, 1.5) + (e.isPlayer ? (setupBonus(ch.setup, circ, ctx.wet, true) + tyreQ + riskQ) : 0)
+      v: perf(e, cat, 'q', circ) + R.normal(0, 1.5) + (e.isPlayer ? (setupBonus(ch.setup, circ, ctx.wet, true) + tyreQ + riskQ) : 0)
     })).sort((a, b) => b.v - a.v).map(x => x.id);
   };
 
   Race.expected = function (entries, cat) {
-    const s = entries.map(e => ({ id: e.id, v: perf(e, cat, 'r') })).sort((a, b) => b.v - a.v);
+    const s = entries.map(e => ({ id: e.id, v: perf(e, cat, 'r', circ) })).sort((a, b) => b.v - a.v);
     return s.findIndex(x => x.id === 'player') + 1;
   };
 
@@ -91,16 +99,18 @@
 
     const flC = fin.slice(0, 10).map(r => ({
       r,
-      v: perf(r.e, cat, 'r') + (r.id === 'player' && tyre === 2 ? 1.8 : 0) + (r.id === 'player' && risk === 2 ? 1.2 : 0) + R.normal(0, 2.3)
+      v: perf(r.e, cat, 'r', circ) + (r.id === 'player' && tyre === 2 ? 1.8 : 0) + (r.id === 'player' && risk === 2 ? 1.2 : 0) + R.normal(0, 2.3)
     })).sort((a, b) => b.v - a.v)[0];
-    const flId = spec.fl && flC ? flC.r.id : null;
-    const poleId = spec.pole ? ctx.poleId : null;
+    const hasFl = spec.id !== 'sprint';
+    const hasPole = spec.grid === 'quali' || spec.grid === 'quali2';
+    const flId = hasFl && flC ? flC.r.id : null;
+    const poleId = hasPole ? (spec.grid === 'quali2' ? (ctx.poleId2 || ctx.poleId) : ctx.poleId) : null;
 
     return sorted.map((r, i) => {
       const classified = !r.dnf;
       let pts = classified ? (spec.pts[i] || 0) : 0;
-      if (poleId === r.id) pts += spec.pole;
-      if (flId === r.id && i < 10 && classified) pts += spec.fl;
+      if (poleId === r.id && spec.pole) pts += spec.pole;
+      if (flId === r.id && i < 10 && classified && spec.fl) pts += spec.fl;
       return { id: r.id, teamId: r.e.teamId, pos: i + 1, grid: r.gp, dnf: r.dnf, dnfLap: r.dnfLap, pts, fl: flId === r.id, pole: poleId === r.id, pen: r.pen };
     });
   }
@@ -112,14 +122,16 @@
 
     const rawRes = entries.map(e => {
       const gp = grid.indexOf(e.id) + 1;
-      let v = perf(e, cat, 'r') + (n - gp) / n * circ.q * 2.2 + R.normal(0, sig);
-      let dnfP = cat.dnf * (1 + (82 - e.attrs.ATE) / 70) * (1 + (80 - e.car) / 110) * (wet ? 1.5 : 1);
+      let v = perf(e, cat, 'r', circ) + (n - gp) / n * circ.q * 2.2 + R.normal(0, sig);
+      const relScore = e.parts ? e.parts.rel : e.car;
+      let dnfP = cat.dnf * (1 + (82 - e.attrs.ATE) / 70) * (1 + (80 - relScore) / 95) * (wet ? 1.5 : 1);
       let pen = false;
       let stratInfo = null;
 
       if (e.isPlayer) {
         const sBonus = setupBonus(ch.setup, circ, wet, false);
-        const tFx = tyreEffect(tyre, circ, wet, sc, e.attrs.ATE);
+        const chassisBonus = e.parts ? (e.parts.chassis - 75) * 0.25 : 0;
+        const tFx = tyreEffect(tyre, circ, wet, sc, e.attrs.ATE + chassisBonus);
         const rFx = riskEffect(risk, circ, wet);
         const totalStrat = sBonus + tFx.pace + rFx.pace;
         v += totalStrat + traitMult(state, 'race') - 1 + (ctx.racingInjured ? -2.5 : 0);
@@ -273,7 +285,7 @@
     const circ = cal.circuit, wet = R.chance(circ.rain / 100);
     const ctx = { choices: choices || {}, wet, racingInjured: opts && opts.racingInjured };
     const q1 = Race.quali(entries, cat, circ, ctx), q2 = Race.quali(entries, cat, circ, ctx);
-    ctx.poleId = q1[0];
+    ctx.poleId = q1[0]; ctx.poleId2 = q2[0];
     const specs = cat.races.slice();
     if (cat.id === 'f1' && cal.sprint) specs.unshift(cat.sprint);
     const results = [];

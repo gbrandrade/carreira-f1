@@ -11,6 +11,7 @@
     monthOfWeek: w => MONTHS[Math.min(11, Math.floor((w - 1) / 4.35))],
     fmtMoney(n) {
       const a = Math.abs(n), s = n < 0 ? '-' : '';
+      if (a >= 1e9) return s + 'US$ ' + (a / 1e9).toFixed(a >= 1e10 ? 1 : 2).replace('.', ',') + ' bi';
       if (a >= 1e6) return s + 'US$ ' + (a / 1e6).toFixed(a >= 1e7 ? 1 : 2).replace('.', ',') + ' mi';
       if (a >= 1e3) return s + 'US$ ' + Math.round(a / 1e3) + ' mil';
       return s + 'US$ ' + Math.round(a);

@@ -10,6 +10,56 @@
   W.team = (state, catId, teamId) => (state.world.teams[catId] || []).find(t => t.id === teamId);
   W.activeTeams = (state, catId) => (state.world.teams[catId] || []).filter(t => t.active !== false);
 
+  /* Garante que cada equipe tenha os 5 subsistemas detalhados do carro e recalcula o OVR geral. */
+  W.ensureCarParts = function (t) {
+    if (!t) return null;
+    if (!t.parts) {
+      const base = t.car || 75;
+      // DNA realista por equipe de F1
+      const dna = {
+        rb:  { aero: 3,  power: 1,  rel: 1,  chassis: 2,  quali: 2 },
+        fer: { aero: 1,  power: 3,  rel: 0,  chassis: 1,  quali: 3 },
+        mer: { aero: 2,  power: 3,  rel: 2,  chassis: 2,  quali: 1 },
+        mcl: { aero: 3,  power: 2,  rel: 2,  chassis: 3,  quali: 2 },
+        ast: { aero: 1,  power: 0,  rel: 1,  chassis: 0,  quali: 0 },
+        alp: { aero: 0,  power: -1, rel: -1, chassis: 1,  quali: 0 },
+        wil: { aero: -1, power: 2,  rel: 1,  chassis: -1, quali: 1 },
+        aud: { aero: 0,  power: 0,  rel: 0,  chassis: 0,  quali: 0 },
+        haa: { aero: 0,  power: 1,  rel: 0,  chassis: -1, quali: 0 },
+        rbs: { aero: 1,  power: 0,  rel: 0,  chassis: 1,  quali: 1 },
+        cad: { aero: -2, power: 0,  rel: -2, chassis: -1, quali: -1 }
+      }[t.id] || { aero: 0, power: 0, rel: 0, chassis: 0, quali: 0 };
+
+      t.parts = {
+        aero:    U.clamp(Math.round(base + dna.aero), 45, 99),
+        power:   U.clamp(Math.round(base + dna.power), 45, 99),
+        rel:     U.clamp(Math.round(base + dna.rel), 45, 99),
+        chassis: U.clamp(Math.round(base + dna.chassis), 45, 99),
+        quali:   U.clamp(Math.round(base + dna.quali), 45, 99)
+      };
+      t.seasonStartParts = Object.assign({}, t.parts);
+    }
+    return t.parts;
+  };
+
+  W.recalcCar = function (t) {
+    const pt = W.ensureCarParts(t);
+    if (!pt) return t ? t.car : 70;
+    const avg = 0.28 * pt.aero + 0.26 * pt.power + 0.14 * pt.rel + 0.18 * pt.chassis + 0.14 * pt.quali;
+    t.car = U.clamp(Math.round(avg * 10) / 10, 45, 99);
+    return t.car;
+  };
+
+  W.upgradeCarPart = function (t, partKey, delta) {
+    const pt = W.ensureCarParts(t);
+    if (!pt || pt[partKey] == null) return 0;
+    const before = pt[partKey];
+    pt[partKey] = U.clamp(Math.round((pt[partKey] + delta) * 10) / 10, 45, 99);
+    W.recalcCar(t);
+    return Math.round((pt[partKey] - before) * 10) / 10;
+  };
+
+
   function makeName(state, country) {
     const key = D.names[country] ? country : (D.nameAlias[country] || 'BRA'), n = D.names[key];
     const used = new Set(state.world.drivers.concat(state.world.pending).map(d => d.name));
@@ -263,7 +313,14 @@
       if (!c) return false;
       if (d.cat === 'f1' && keepHistoricalF1) return true;
       if (age >= d.retireAge) {
-        if (d.real && d.cat === 'f1') Game.systems.news.add(`${d.name} se aposenta da F1.`);
+        if (d.cat === 'f1') {
+          const retMsgs = [
+            `BREAKING F1: ${d.name} anuncia aposentadoria definitiva das pistas aos ${age} anos.`,
+            `FIM DE UMA ERA: ${d.name} pendura o capacete e deixa o grid da F1.`,
+            `OFICIAL: ${d.name} se aposenta da Fórmula 1 após longa carreira.`
+          ];
+          Game.systems.news.add(R.pick(retMsgs));
+        }
         return false;
       }
       if (age > c.maxAge) return false;
@@ -302,21 +359,44 @@
     W.swaps(state, keepHistoricalF1);
   };
 
-  // mercado: bons pilotos em carros ruins trocam com pilotos piores em carros melhores
+  // mercado: transferências dinâmicas, rescisões e retornos para casa com manchetes variadas
   W.swaps = function (state, skipF1) {
     const y = state.year, news = Game.systems.news;
     const cats = skipF1 ? ['f2', 'f3'] : ['f1', 'f2', 'f3'];
     cats.forEach(id => {
       const ds = state.world.drivers.filter(d => d.cat === id), teams = W.activeTeams(state, id);
       let n = 0;
-      for (let i = 0; i < 16 && n < (id === 'f1' ? 3 : 2); i++) {
+      for (let i = 0; i < 20 && n < (id === 'f1' ? 4 : 2); i++) {
         const a = R.pick(ds), b = R.pick(ds);
         if (!a || !b || a === b || a.teamId === b.teamId) continue;
         const ta = teams.find(t => t.id === a.teamId), tb = teams.find(t => t.id === b.teamId);
         if (!ta || !tb) continue;
-        if (W.rating(a, y) - W.rating(b, y) >= 3 && tb.car - ta.car >= 4) {
-          a.teamId = tb.id; b.teamId = ta.id; n++;
-          if (id !== 'f3') news.add(`${id.toUpperCase()}: ${a.name} fecha com a ${tb.name}; ${b.name} vai para a ${ta.name}.`);
+        if (W.rating(a, y) - W.rating(b, y) >= 2.5 && tb.car - ta.car >= 3) {
+          if (!a.teamHistory) a.teamHistory = [ta.id];
+          if (!b.teamHistory) b.teamHistory = [tb.id];
+          const isHomecoming = a.teamHistory.includes(tb.id) && a.teamHistory[a.teamHistory.length - 1] !== tb.id;
+
+          a.teamId = tb.id;
+          b.teamId = ta.id;
+          a.teamHistory.push(tb.id);
+          b.teamHistory.push(ta.id);
+          n++;
+
+          if (id === 'f1') {
+            if (isHomecoming) {
+              news.add(`BREAKING F1: ${a.name} volta para casa e reassume o cockpit da ${tb.name} após anos fora!`, 'good');
+            } else {
+              const templates = [
+                `BOMBA NO MERCADO: ${a.name} rescinde contrato com a ${ta.name} e assina com a ${tb.name}; ${b.name} faz o caminho inverso.`,
+                `OFICIAL NA F1: ${tb.name} anuncia ${a.name} como novo titular; ${b.name} se muda para a ${ta.name}.`,
+                `DANÇA DAS CADEIRAS: ${a.name} deixa a ${ta.name} para liderar o projeto da ${tb.name}.`,
+                `BREAKING: Após negociação relâmpago, ${a.name} fecha com a ${tb.name} e ${b.name} assume vaga na ${ta.name}.`
+              ];
+              news.add(R.pick(templates));
+            }
+          } else if (id === 'f2') {
+            news.add(`F2: ${a.name} assina com a ${tb.name}; ${b.name} vai para a ${ta.name}.`);
+          }
         }
       }
     });
@@ -328,21 +408,79 @@
     W.syncF1Teams(state, false);
     Object.keys(state.world.teams).forEach(id => {
       state.world.teams[id].forEach(t => {
-        if (id === 'f1' && y <= cfg.dataYear && D.f1History && D.f1History[t.id]) {
+        W.ensureCarParts(t);
+        if (id === 'f1' && y <= cfg.dataYear && D.f1History && D.f1History[t.id] && !t.isCustom) {
           const era = D.f1History[t.id].find(e => y >= e.from && y <= e.to);
           if (era && era.cars && era.cars[y] != null) {
-            t.car = era.cars[y];
+            const target = era.cars[y];
+            const diff = target - t.car;
+            ['aero', 'power', 'rel', 'chassis', 'quali'].forEach(k => {
+              t.parts[k] = U.clamp(Math.round((t.parts[k] + diff + R.normal(0, 0.8)) * 10) / 10, 50, 99);
+            });
+            W.recalcCar(t);
+            t.seasonStartParts = Object.assign({}, t.parts);
             return;
           }
         }
         const base = D.teams[id].find(x => x.id === t.id) || t;
-        if (id === 'f1' && W.isRegYear(y)) t.car = U.clamp(R.normal(80, 6.5), 64, 95);
-        else t.car = U.clamp(t.car + R.normal(0, 1.6) + (base.car - t.car) * .08, 55, 97);
+        if (id === 'f1' && W.isRegYear(y)) {
+          const regBase = U.clamp(R.normal(80, 6.0), 65, 94);
+          ['aero', 'power', 'rel', 'chassis', 'quali'].forEach(k => {
+            t.parts[k] = U.clamp(Math.round((regBase + R.normal(0, 3.2)) * 10) / 10, 55, 97);
+          });
+        } else {
+          const pull = ((base.car || t.car) - t.car) * 0.08;
+          ['aero', 'power', 'rel', 'chassis', 'quali'].forEach(k => {
+            t.parts[k] = U.clamp(Math.round((t.parts[k] + R.normal(0, 1.5) + pull) * 10) / 10, 52, 98);
+          });
+        }
+        W.recalcCar(t);
+        t.seasonStartParts = Object.assign({}, t.parts);
       });
     });
     if (state.world.teams.f1 && W.isRegYear(y) && y > cfg.startYear) {
-      Game.systems.news.add(`Nova era técnica na F1 em ${y}: o equilíbrio entre as equipes foi embaralhado.`, 'good');
+      Game.systems.news.add(`Nova era técnica na F1 em ${y}: o equilíbrio aerodinâmico e de motores foi embaralhado.`, 'good');
     }
+  };
+
+  /* Demissões e trocas no meio da temporada na F1/F2 quando um piloto está muito abaixo do companheiro. */
+  W.midSeasonSackings = function (state) {
+    const se = state.season;
+    if (!se || (se.catId !== 'f1' && se.catId !== 'f2')) return;
+    const catId = se.catId;
+    const teams = W.activeTeams(state, catId);
+    const ranked = Game.systems.race.ranked(se);
+    const y = state.year;
+
+    teams.forEach(t => {
+      if (t.isCustom) return; // Equipe própria é gerida pelo jogador
+      const teamDrivers = state.world.drivers.filter(d => d.cat === catId && d.teamId === t.id);
+      if (teamDrivers.length < 2) return;
+      const dStats = teamDrivers.map(d => {
+        const r = ranked.find(x => x.id === d.id);
+        return { d, pts: r ? r.pts : 0, pos: r ? r.pos : 20 };
+      }).sort((a, b) => b.pts - a.pts);
+
+      const best = dStats[0], worst = dStats[1];
+      if (best.pts >= 35 && worst.pts <= best.pts * 0.25 && worst.pos >= 12 && R.chance(0.45)) {
+        const feederCat = catId === 'f1' ? 'f2' : 'f3';
+        const candidates = state.world.drivers.filter(d => d.cat === feederCat && (y - d.birth) >= 18)
+          .sort((a, b) => W.rating(b, y) - W.rating(a, y));
+        if (!candidates.length) return;
+        const rookie = candidates[0];
+        const sacked = worst.d;
+
+        sacked.cat = catId === 'f1' ? 'f1_ret' : 'f2_pool';
+        sacked.teamId = null;
+        rookie.cat = catId;
+        rookie.teamId = t.id;
+
+        se.entries[rookie.id] = { name: rookie.name, country: rookie.country, teamId: t.id, teamName: t.name };
+        delete se.entries[sacked.id];
+
+        Game.systems.news.add(`BOMBA NO MEIO DO ANO: ${t.name} demite ${sacked.name} por maus resultados e promove ${rookie.name} imediatamente!`, 'bad');
+      }
+    });
   };
 
   // lista de inscritos de uma categoria para a temporada/corrida (inclui o jogador se pedido)
@@ -350,11 +488,13 @@
     const y = state.year, p = state.player;
     const list = state.world.drivers.filter(d => d.cat === catId).map(d => {
       const t = W.team(state, catId, d.teamId);
-      return { id: d.id, name: d.name, country: d.country, teamId: d.teamId, attrs: A.driverAttrs(d, y), car: t ? t.car : 60, isPlayer: false, titles: d.titles || 0 };
+      const parts = t ? W.ensureCarParts(t) : null;
+      return { id: d.id, name: d.name, country: d.country, teamId: d.teamId, attrs: A.driverAttrs(d, y), car: t ? t.car : 60, parts, isPlayer: false, titles: d.titles || 0 };
     });
     if (withPlayer) {
       const t = W.team(state, catId, p.teamId);
-      list.push({ id: 'player', name: p.name, country: p.country, teamId: p.teamId, attrs: A.playerAttrs(p, y, opts), car: (t ? t.car : 60) + (p.carBonus || 0), isPlayer: true, titles: p.f1.titles || 0 });
+      const parts = t ? W.ensureCarParts(t) : null;
+      list.push({ id: 'player', name: p.name, country: p.country, teamId: p.teamId, attrs: A.playerAttrs(p, y, opts), car: (t ? t.car : 60) + (p.carBonus || 0), parts, isPlayer: true, titles: p.f1.titles || 0 });
     }
     return list;
   };

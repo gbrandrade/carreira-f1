@@ -14,7 +14,11 @@ Game.data.assets = [
   { id: 'sim3', type: 'Simulador', name: 'Simulador de elite', price: 2000000, upkeep: 120000, minLv: 6, fx: { train: 1.8 }, desc: '+++ evolução anual' },
   { id: 'classico', type: 'Carro', name: 'Clássico de coleção', price: 2000000, upkeep: 30000, minLv: 7, fx: { pop: 4, rep: 1 }, desc: '+++ popularidade e imagem' },
   { id: 'mansao', type: 'Casa', name: 'Mansão em Mônaco', price: 12000000, upkeep: 250000, minLv: 7, fx: { mental: 4, pop: 4 }, desc: '+++ mente e prestígio' },
-  { id: 'iate', type: 'Iate', name: 'Iate de luxo', price: 8000000, upkeep: 400000, minLv: 8, fx: { pop: 7, mental: 2 }, desc: 'muito prestígio' }
+  { id: 'iate', type: 'Iate', name: 'Iate de luxo', price: 8000000, upkeep: 400000, minLv: 8, fx: { pop: 7, mental: 2 }, desc: 'muito prestígio' },
+  { id: 'jato', type: 'Carro', name: 'Jato Executivo Global', price: 45000000, upkeep: 1800000, minLv: 8, fx: { phys: 4, mental: 4, pop: 5 }, desc: 'viagens sem fadiga e status' },
+  { id: 'ilha', type: 'Casa', name: 'Ilha Privada no Caribe', price: 120000000, upkeep: 4500000, minLv: 8, fx: { mental: 6, pop: 8 }, desc: 'refúgio exclusivo de lenda' },
+  { id: 'equipe_base', type: 'Equipe', name: 'Equipe Satélite de F2/F3', price: 250000000, upkeep: 12000000, minLv: 8, fx: { rep: 6, pop: 6, train: 0.8 }, desc: 'sua própria escuderia de base' },
+  { id: 'holding_f1', type: 'Equipe', name: 'Participação Acionária na F1', price: 650000000, upkeep: 25000000, minLv: 8, fx: { rep: 10, pop: 10 }, desc: 'sócio minoritário do paddock' }
 ];
 
 Game.data.investments = [

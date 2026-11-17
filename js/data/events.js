@@ -1,6 +1,45 @@
 /* Eventos aleatórios. Cada escolha tem fx (efeitos) e, opcionalmente, risk:{p, fx, text}.
    fx: money, rep (reputação no paddock), pop (popularidade), family, mental, phys, train, injury, sponsor, flag. */
 Game.data.events = [
+  { id: 'rival_clash', title: 'RIVALIDADE NO LIMITE: Toque na pista!', text: 'A tensão com seu principal rival pelo título explodiu em uma disputa roda a roda na freada!', minLv: 6, w: 4, cond: s => !!(s.player.rival && s.player.rival.tension >= 55), choices: [
+    { label: 'Manter o pé no fundo e não ceder um milímetro', fx: { pop: 8, rep: 3, mental: -2 }, risk: { p: .35, fx: { rep: -5, money: -100000 }, text: 'Os comissários aplicaram multa e advertência pela manobra.' } },
+    { label: 'Evitar o acidente e cobrar punição no rádio', fx: { rep: 2, pop: -2 } }
+  ] },
+  { id: 'rival_protest', title: 'Guerra política nos bastidores', text: 'A equipe do seu rival na disputa pelo campeonato entrou com um protesto técnico contra o seu carro.', minLv: 8, w: 3.5, cond: s => !!(s.player.rival && s.player.rival.tension >= 50), choices: [
+    { label: 'Contra-atacar denunciando a asa flexível deles', fx: { rep: 3, pop: 5 } },
+    { label: 'Deixar os engenheiros provarem a legalidade em silêncio', fx: { rep: 5, mental: 2 } }
+  ] },
+  { id: 'owner_sponsor_bid', title: 'Proposta de Patrocinador Máster da Escuderia', text: 'Uma gigante global de tecnologia quer estampar o nome na carenagem da sua equipe de F1.', minLv: 8, w: 3.5, cond: s => !!(s.player.ownedTeam), choices: [
+    { label: 'Fechar acordo máster (+US$ 35 mi)', fx: { money: 35000000, pop: 5 } },
+    { label: 'Exigir bônus por pódio (+US$ 20 mi + Reputação)', fx: { money: 20000000, rep: 6 } }
+  ] },
+  { id: 'owner_driver_feud', title: 'Crise interna na sua Escuderia', text: 'Seus dois pilotos se estranharam na reunião técnica e exigem saber quem tem prioridade nas atualizações.', minLv: 8, w: 3, cond: s => !!(s.player.ownedTeam), choices: [
+    { label: 'Manter igualdade total entre os dois carros', fx: { rep: 4, mental: -2 } },
+    { label: 'Priorizar o carro líder do campeonato', fx: { rep: 2, pop: 3 } }
+  ] },
+  { id: 'f1_rumor_contract', title: 'BOMBA NA IMPRENSA: Pré-contrato vazado?', text: 'Um portal europeu cravou que você já assinou em segredo com uma equipe rival para o ano que vem. O chefe da sua equipe exige explicações.', minLv: 8, w: 3.5, choices: [
+    { label: 'Desmentir ao vivo na coletiva da FIA', fx: { rep: 3, pop: 2 } },
+    { label: 'Deixar no ar para valorizar seu passe', fx: { pop: 6, rep: -4 }, risk: { p: .35, fx: { rep: -5 }, text: 'A diretoria não gostou do jogo duplo e congelou atualizações no seu carro.' } },
+    { label: 'Processar o jornalista por notícia falsa', fx: { money: -150000, rep: 4, pop: -2 } }
+  ] },
+  { id: 'f1_fake_news', title: 'Mentira viral nas redes', text: 'Um áudio tirado de contexto circula dizendo que você chamou o carro atual de "carroça". A torcida está dividida.', minLv: 7, w: 3, choices: [
+    { label: 'Publicar vídeo desmentindo e elogiando a fábrica', fx: { rep: 4, pop: 3 } },
+    { label: 'Ironizar a fake news nas redes', fx: { pop: 7, rep: -2 }, risk: { p: .3, fx: { pop: -5 }, text: 'Parte dos fãs achou a resposta arrogante.' } },
+    { label: 'Ignorar completamente', fx: { rep: -3, pop: -3 } }
+  ] },
+  { id: 'f1_mate_war', title: 'Guerra fria nos boxes', text: 'Seu companheiro de equipe copiou seu acerto de telemetria e ainda reclamou no rádio que você o atrapalhou no Q3.', minLv: 8, w: 3.5, choices: [
+    { label: 'Fechar o acesso aos seus dados de telemetria', fx: { rep: 2, mental: 3, pop: -1 } },
+    { label: 'Expor a situação na entrevista pós-treino', fx: { pop: 6, rep: -4 } },
+    { label: 'Resolver na pista sem falar nada', fx: { mental: 2, rep: 3 } }
+  ] },
+  { id: 'f1_fia_td', title: 'Diretiva Técnica da FIA', text: 'Equipes rivais denunciaram o assoalho do seu carro. A FIA exige ajustes antes da classificação.', minLv: 8, w: 2.5, choices: [
+    { label: 'Apoiar os engenheiros no simulador durante a noite', fx: { train: .3, rep: 4, phys: -4, mental: -3 } },
+    { label: 'Atacar os rivais na imprensa por "choradeira"', fx: { pop: 5, rep: -2 } }
+  ] },
+  { id: 'f1_charity_gala', title: 'Leilão de Gala em Mônaco', text: 'Você foi convidado como estrela principal de um leilão beneficente do paddock.', minLv: 8, w: 2, cond: s => s.player.money >= 2000000, choices: [
+    { label: 'Doar US$ 1 mi e arrematar item histórico', fx: { money: -1000000, pop: 8, rep: 5, mental: 3 } },
+    { label: 'Apenas comparecer ao evento', fx: { pop: 2, rep: 1 } }
+  ] },
   { id: 'acad_ad', title: 'Campanha publicitária da Academia', text: 'Sua academia de pilotos convocou você para gravar um comercial oficial ao lado dos titulares da F1.', minLv: 2, maxLv: 7, w: 3, cond: s => !!(s.player.academy && s.player.academy.active), choices: [
     { label: 'Participar da gravação e ações de mídia', fx: { pop: 6, money: 25000, acadRep: 7, mental: -1 } },
     { label: 'Focar apenas no simulador e recusar', fx: { acadRep: -12, train: .15 } }

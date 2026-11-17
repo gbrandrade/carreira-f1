@@ -4,6 +4,30 @@
   const S = Game.systems, Car = S.career = {};
 
   Car.save = () => { if (Game.state) Game.core.storage.save(Game.state); };
+  const FOCUS_MAP = {
+    'Aerodinâmica': 'aero',
+    'Motor': 'power',
+    'Confiabilidade': 'rel',
+    'Chassi e pneus': 'chassis',
+    'Ritmo de classificação': 'quali'
+  };
+
+  Car.applyDevFocusUpgrade = function (s) {
+    const p = s.player, se = s.season;
+    if (!p.devFocus || p.noSeat) return;
+    const t = S.world.team(s, se.catId, p.teamId);
+    if (!t) return;
+    S.world.ensureCarParts(t);
+    const partKey = FOCUS_MAP[p.devFocus] || 'aero';
+    const b = cl((p.engineerRel / 100 * 2.2 + 1.2) * S.pressure.mult(s, 'dev'), 0.8, 5.5);
+    const actual = S.world.upgradeCarPart(t, partKey, b);
+    if (S.owner && S.owner.hasTeam(p) && p.ownedTeam.id === t.id) {
+      p.ownedTeam.parts = Object.assign({}, t.parts);
+      p.ownedTeam.car = t.car;
+    }
+    S.news.add(`Pacote de atualização (${p.devFocus}): +${actual.toFixed(1)} pts em ${p.devFocus} na ${t.name} (Carro OVR ${t.car.toFixed(1)}).`, 'good');
+  };
+
 
   Car.newGame = function (setup) {
     const s = {
@@ -25,7 +49,7 @@
       h2h: { qualiW: 0, qualiL: 0, raceW: 0, raceL: 0, mateId: null, mateName: '' },
       teamRole: 'Igualdade',
       stats: { races: 0, wins: 0, podiums: 0, poles: 0, fl: 0, points: 0, titles: 0, dnfs: 0, seasons: 0 },
-      f1: { races: 0, wins: 0, podiums: 0, poles: 0, fl: 0, points: 0, titles: 0 }, titlesList: [], superPoints: [], singleSeaterSeasons: 0,
+      f1: { races: 0, wins: 0, podiums: 0, poles: 0, fl: 0, points: 0, titles: 0 }, titlesList: [], f1TeamsChamp: [], wonCircuits: [], superPoints: [], singleSeaterSeasons: 0, rival: null, ownedTeam: null,
       lastSeason: null, season: null, ach: {}, flags: {}, academy: null, fired: false, forcedUp: false, noSeat: false, firedCount: 0
     };
     S.world.init(s);
@@ -40,19 +64,28 @@
 
   Car.startSeason = function () {
     const s = Game.state, p = s.player, c = p.contract;
-    if (!c) return null;
-    p.catId = c.catId; p.teamId = c.teamId;
+    const bossOnly = S.owner && S.owner.isBossOnly(p);
+    if (!c && !bossOnly) return null;
+
+    if (S.owner) S.owner.syncCustomTeam(s);
+    if (bossOnly) {
+      p.catId = 'f1';
+      p.teamId = p.ownedTeam.id;
+    } else {
+      p.catId = c.catId;
+      p.teamId = c.teamId;
+    }
     S.world.updateCars(s);
 
-    const reserve = Car.isReserve(p);
-    if (!reserve) {
+    const reserve = !bossOnly && Car.isReserve(p);
+    const playerRacing = !bossOnly && !reserve;
+    if (playerRacing) {
       S.world.seatPlayer(s);
     } else {
-      // Como reserva na F1, os 2 titulares permanecem na equipe
       S.world.fillSeats(s, p.catId);
     }
 
-    const entries = S.world.entries(s, p.catId, !reserve), names = {};
+    const entries = S.world.entries(s, p.catId, playerRacing), names = {};
     entries.forEach(e => {
       const t = S.world.team(s, p.catId, e.teamId);
       names[e.id] = { name: e.name, country: e.country, teamId: e.teamId, teamName: t ? t.name : '-' };
@@ -64,7 +97,9 @@
 
     const mate = entries.find(e => !e.isPlayer && e.teamId === p.teamId);
     p.h2h = { qualiW: 0, qualiL: 0, raceW: 0, raceL: 0, mateId: mate ? mate.id : null, mateName: mate ? mate.name : '' };
-    if (reserve) {
+    if (bossOnly) {
+      p.teamRole = 'Chefe de Equipe';
+    } else if (reserve) {
       p.teamRole = 'Piloto Reserva';
     } else if (mate) {
       const myGer = S.contracts.ger(s);
@@ -76,7 +111,8 @@
     s.season = {
       year: s.year, catId: p.catId, cal: S.calendar.build(p.catId, s.year), round: 0,
       standings: { drivers: {}, teams: {} }, entries: names, last: null, finished: false,
-      reserveCallUp: false
+      reserveCallUp: false,
+      regConceptPending: p.catId === 'f1' && S.world.isRegYear(s.year)
     };
     p.season = { races: 0, rounds: 0, wins: 0, podiums: 0, poles: 0, points: 0, top10: 0, champion: false };
     p.devFocus = null; p.interviewDone = false; p.carBonus = 0; p.forcedUp = false; p.fired = false; p.noSeat = false;
@@ -84,7 +120,8 @@
     const paid = S.economy.payEntry(s);
     S.economy.genSponsorOffers(s);
     s.phase = 'season'; s.offers = []; s.summary = null;
-    S.news.add(`Temporada ${s.year} de ${C[p.catId].short} começa. Equipe: ${c.teamName}${reserve ? ' (Piloto Reserva)' : ''}.`);
+    const teamLabel = bossOnly ? p.ownedTeam.name : c.teamName;
+    S.news.add(`Temporada ${s.year} de ${C[p.catId].short} começa. Equipe: ${teamLabel}${bossOnly ? ' (Chefe de Equipe)' : reserve ? ' (Piloto Reserva)' : ''}.`);
     Car.save();
     return paid;
   };
@@ -96,7 +133,8 @@
     const injured = p.injury > 0;
     const reserve = Car.isReserve(p);
     const reserveRacing = reserve && !!se.reserveCallUp;
-    const rest = !!choices.rest || p.noSeat || (reserve && !reserveRacing) || (injured && !choices.raceInjured);
+    const bossOnly = S.owner && S.owner.isBossOnly(p);
+    const rest = !!choices.rest || bossOnly || p.noSeat || (reserve && !reserveRacing) || (injured && !choices.raceInjured);
 
     let entries = S.world.entries(s, se.catId, !rest, { injured: injured && !rest });
     // Se for piloto reserva chamado para substituir titular lesionado, substitui temporariamente o companheiro de menor GER
@@ -146,7 +184,7 @@
         }
         p.season.races++; p.season.points += o.pts;
         if (!o.dnf) {
-          if (o.pos === 1) p.season.wins++;
+          if (o.pos === 1) { p.season.wins++; if (cat.id === 'f1') { if (!p.wonCircuits) p.wonCircuits = []; if (!p.wonCircuits.includes(cal.circuit.id)) p.wonCircuits.push(cal.circuit.id); } }
           if (o.pos <= 3) p.season.podiums++;
           if (o.pos <= 10) p.season.top10++;
         }
@@ -193,6 +231,7 @@
       }
       if (injured) { p.injury = 0; p.phys = cl(p.phys - 8, 0, 100); }
       S.pressure.afterRace(s, week);
+      if (S.owner) S.owner.updateRival(s, week);
     } else {
       if (p.injury > 0) p.injury--;
       if (Car.isReserve(p)) {
@@ -268,10 +307,9 @@
       const circ = cal.circuit;
       Car.playRound({ tyre: 1, setup: circ.prof, risk: 1, raceInjured: false });
       count++;
-      if (se.round === Math.floor(se.cal.length / 2) && p.devFocus && !p.noSeat) {
-        const t = S.world.team(s, se.catId, p.teamId);
-        const b = cl((p.engineerRel / 100 * 1.2 + .5) * S.pressure.mult(s, 'dev'), 0, 3);
-        if (t) { t.car += b; S.news.add(`Desenvolvimento (${p.devFocus}): o carro da ${t.name} ganhou ${b.toFixed(1)} pontos.`, 'good'); }
+      if (se.round === Math.floor(se.cal.length / 2)) {
+        Car.applyDevFocusUpgrade(s);
+        S.world.midSeasonSackings(s);
       }
     }
 
@@ -310,10 +348,9 @@
   Car.afterRound = function () {
     const s = Game.state, p = s.player, se = s.season, out = { events: [], fired: false };
     p.interviewDone = false;
-    if (se.round === Math.floor(se.cal.length / 2) && p.devFocus && !p.noSeat) {
-      const t = S.world.team(s, se.catId, p.teamId);
-      const b = cl((p.engineerRel / 100 * 1.2 + .5) * S.pressure.mult(s, 'dev'), 0, 3);
-      if (t) { t.car += b; S.news.add(`Desenvolvimento (${p.devFocus}): o carro da ${t.name} ganhou ${b.toFixed(1)} pontos.`, 'good'); }
+    if (se.round === Math.floor(se.cal.length / 2)) {
+      Car.applyDevFocusUpgrade(s);
+      S.world.midSeasonSackings(s);
     }
     if (!p.noSeat) out.events = S.pressure.rollEvents(s);
     Car.save();
@@ -359,6 +396,8 @@
       S.attributes.growCap(p, 'ATE', 0.5);
       if (cat.id === 'f1') {
         p.f1.titles++;
+        if (!p.f1TeamsChamp) p.f1TeamsChamp = [];
+        if (p.teamId && !p.f1TeamsChamp.includes(p.teamId)) p.f1TeamsChamp.push(p.teamId);
         if (!p.f1.firstTitleAge) p.f1.firstTitleAge = year - p.birth;
         if (D.f1Records && p.f1.titles > D.f1Records.titles.value) {
           D.f1Records.titles.value = p.f1.titles;
@@ -370,7 +409,24 @@
     if (cat.single && p.season.rounds >= se.cal.length * .8 && !reserve) p.singleSeaterSeasons++;
     const slPts = (played && !reserve) ? S.superlicense.pointsFor(cat.id, pos) : 0;
     p.superPoints.push({ year, catId: cat.id, pts: slPts });
+    if (cat.id === 'f1' && p.h2h && p.h2h.raceW >= 10 && p.h2h.raceL === 0) {
+      s.flags.unbeatenMate = true;
+    }
+    if (p.rival && me) {
+      const rivRank = ranked.find(r => r.id === p.rival.id);
+      if (rivRank && me.pos < rivRank.pos && p.rival.tension >= 45) {
+        p.reputation = cl((p.reputation || 45) + 6, 0, 100);
+        p.popularity = cl((p.popularity || 10) + 5, 0, 100);
+        S.news.both(`RIVALIDADE VENCIDA: Você superou ${p.rival.name} no campeonato! (+6 Reputação)`, 'good');
+      }
+      p.rival = null;
+    }
     const acct = S.economy.seasonEnd(s);
+    const ownerAcct = S.owner ? S.owner.seasonEndPayout(s) : null;
+    if (ownerAcct) {
+      acct.lines.push({ label: `Escuderia ${ownerAcct.teamName} (${ownerAcct.cPos}º Constr.)`, amount: ownerAcct.net });
+      acct.net += ownerAcct.net;
+    }
 
     const statusLine = reserve
       ? `${year} F1 (Reserva): ${played ? played + ' GP(s) disputado(s), ' + (me ? me.pts : 0) + ' pts' : 'trabalho no simulador'}.`
@@ -378,7 +434,14 @@
     S.news.both(statusLine, champ ? 'good' : '');
     p.lastSeason = { pos, champ, pts: me ? me.pts : 0, catId: cat.id, year, reserve };
 
-    if (p.contract) { p.contract.years--; if (p.contract.years <= 0) p.contract = null; }
+    if (p.contract) {
+      if (S.owner && S.owner.hasTeam(p) && p.contract.teamId === p.ownedTeam.id) {
+        p.contract.years = 5;
+      } else {
+        p.contract.years--;
+        if (p.contract.years <= 0) p.contract = null;
+      }
+    }
     const acad = S.contracts.ensureAcademy(p);
     if (acad) {
       // Penalidade se não cumpriu compromissos de mídia/propaganda da academia
@@ -449,7 +512,8 @@
   Car.checkEnd = function () {
     const s = Game.state, p = s.player, age = s.year - p.birth, st = S.superlicense.status(p, s.year);
     if (p.bankruptcies >= 2) return { reason: 'falencia', title: 'Falência definitiva', text: 'Duas falências encerraram a sua carreira nas pistas.' };
-    if (age >= cfg.retireForcedAge) return { reason: 'aposentadoria', title: 'Aposentadoria', text: `Aos ${age} anos você encerra a carreira.` };
+    const maxAge = (S.owner && S.owner.hasTeam(p)) ? 70 : cfg.retireForcedAge;
+    if (age >= maxAge) return { reason: 'aposentadoria', title: 'Aposentadoria', text: `Aos ${age} anos você encerra a carreira.` };
     if (!s.flags.wasF1 && p.catId !== 'f1' && ((age >= cfg.frustratedAge && !st.eligible) || age >= cfg.neverF1QuitAge)) {
       return { reason: 'frustrada', title: 'Carreira frustrada', text: `Aos ${age} anos, a F1 não vai acontecer. Você encerra a carreira sem realizar o sonho.` };
     }

@@ -32,6 +32,15 @@
         h('div', { class: 'pt', style: { marginTop: '.4rem' } }, 'Condição física e mental'),
         ui.bar('Físico', p.phys),
         ui.bar('Mente', p.mental),
+        (s.phase === 'season' && p.rival)
+          ? h('div', { style: { marginTop: '.2rem', paddingTop: '.35rem', borderTop: '1px solid var(--line)' } },
+              h('div', { class: 'row between tiny' },
+                h('span', { class: 'pt' }, 'Rival pelo título'),
+                h('b', { class: 'small' }, p.rival.name)
+              ),
+              ui.bar('Tensão', p.rival.tension)
+            )
+          : null,
         h('div', { class: 'grow' }),
         p.injury > 0 ? ui.badge(`Lesionado · ${p.injury} etapa(s)`, 'bad') : h('div', { class: 'row', style: { flexWrap: 'wrap' } }, p.traits.map(id => ui.badge(Game.data.traits.find(t => t.id === id).name)))
       );
@@ -43,8 +52,9 @@
       const isRes = S.career.isReserve(p);
       const acad = S.contracts.ensureAcademy(p);
       let title, sub, btn, art = null, info = null, rightTag = null;
-      if (s.phase === 'offseason' && !p.contract) { title = 'Fora de temporada'; sub = 'Você precisa de um contrato para disputar o próximo ano.'; btn = ui.btn('Negociar contrato', () => ui.go('contract'), 'primary lg', false, 'doc'); }
-      else if (s.phase === 'offseason') { title = `Temporada ${s.year}`; sub = `Contrato assinado com ${p.contract.teamName}.`; btn = ui.btn('Iniciar temporada', () => { S.career.startSeason(); ui.go('hub'); }, 'primary lg', false, 'play'); }
+      const isBoss = S.owner && S.owner.isBossOnly(p);
+      if (s.phase === 'offseason' && !p.contract && !isBoss) { title = 'Fora de temporada'; sub = 'Você precisa de um contrato para disputar o próximo ano.'; btn = ui.btn('Negociar contrato', () => ui.go('contract'), 'primary lg', false, 'doc'); }
+      else if (s.phase === 'offseason') { title = `Temporada ${s.year}`; sub = isBoss ? `Chefe de Equipe · ${p.ownedTeam.name}` : `Contrato assinado com ${p.contract.teamName}.`; btn = ui.btn('Iniciar temporada', () => { S.career.startSeason(); ui.go('hub'); }, 'primary lg', false, 'play'); }
       else if (se.finished) { title = 'Temporada encerrada'; sub = 'Todas as etapas foram disputadas.'; btn = ui.btn('Encerrar temporada', () => ui.finishSeason(), 'primary lg', false, 'check'); }
       else {
         const n = se.cal[se.round];

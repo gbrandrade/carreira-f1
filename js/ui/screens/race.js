@@ -61,12 +61,15 @@
       const p = s.player, se = s.season, cal = se.cal[se.round], cat = C[se.catId], r = ui.race, inj = p.injury > 0, cc = cal.circuit;
       const isJunior = true;
       const isRes = S.career.isReserve(p);
+      const isBoss = S.owner && S.owner.isBossOnly(p);
       const isCallUp = isRes && !!se.reserveCallUp;
       const wetLikely = cc.rain >= 35;
 
-      const stageTag = isCallUp
-        ? ui.badge('convocado para correr', 'ok')
-        : isRes
+      const stageTag = isBoss
+        ? ui.badge('chefe de equipe (pit wall)', 'acc')
+        : isCallUp
+          ? ui.badge('convocado para correr', 'ok')
+          : isRes
           ? ui.badge('piloto reserva', 'info')
           : isJunior && S.career.isKeyJuniorRound(s)
             ? ui.badge(se.round === 0 ? 'abertura' : se.round === Math.floor(se.cal.length / 2) ? 'meio de temporada' : 'decisão de título', 'acc')
@@ -93,7 +96,35 @@
         [2, 'Macio (C5)', 'muito ritmo + bônus SC', 3, 3, ui.tyreRing('#F03A3A', 'S')]
       ];
 
-      const dec = isRes && !isCallUp
+      const regBanner = se.regConceptPending
+        ? h('div', { class: 'tile', style: { borderColor: 'var(--accent-line)', gap: '.4rem', marginBottom: '.3rem' } },
+            h('div', { class: 'row between' },
+              h('b', { class: 'small acc' }, `Novo Regulamento Técnico (${s.year})`),
+              ui.badge('DECISÃO DE PROJETO', 'acc')
+            ),
+            h('div', { class: 'tiny mut' }, 'Escolha o conceito técnico da sua equipe para o novo ciclo de 4 anos da F1:'),
+            h('div', { class: 'row', style: { flexWrap: 'wrap' } }, [
+              ['radical', 'Conceito Radical (alto risco/recompensa)'],
+              ['balanced', 'Conceito Equilibrado'],
+              ['conservative', 'Motor & Confiabilidade']
+            ].map(([cid, clabel]) => ui.btn(clabel, () => {
+              S.owner.applyRegConcept(s, cid);
+              se.regConceptPending = false;
+              ui.refresh();
+            }, 'sm')))
+          )
+        : null;
+
+      const dec = isBoss
+        ? ui.panel({ title: 'Comando no Pit Wall' },
+            regBanner,
+            h('div', { class: 'empty' },
+              ui.plate('shield', 'var(--accent)', true),
+              h('h3', null, `Chefe de Equipe · ${p.ownedTeam.name}`),
+              h('div', { class: 'small mut' }, 'Seus dois pilotos titulares estão alinhados no grid. Acompanhe o Grande Prêmio ou simule até o próximo momento-chave da temporada.')
+            )
+          )
+        : isRes && !isCallUp
         ? ui.panel({ title: 'Função de Piloto Reserva' },
             h('div', { class: 'empty' },
               ui.plate('sim', 'var(--info)', true),
@@ -102,6 +133,7 @@
             )
           )
         : ui.panel({ title: 'Decisões pré-corrida' },
+            regBanner,
             group('Composto e estratégia de pneus', 'tyre', tyreOpts),
             group('Setup aerodinâmico', 'setup', [['dw', 'Alta carga', 'curvas e pista molhada'], ['bal', 'Equilibrado', 'seguro em qualquer pista'], ['pw', 'Baixa carga', 'velocidade final máxima']]),
             group('Estilo de pilotagem', 'risk', [[0, 'Conservador', 'evita batidas e chuva', 1, 1], [1, 'Padrão', 'equilibrado', 2, 2], [2, 'Agressivo', 'ultrapassagens no limite', 3, 3]]),
@@ -158,8 +190,8 @@
         }
       };
 
-      const rest = (inj && !r.inj) || (isRes && !isCallUp);
-      const canFastForward = (isJunior && !isRes && se.round < se.cal.length - 1) || (isRes && !isCallUp);
+      const rest = isBoss || (inj && !r.inj) || (isRes && !isCallUp);
+      const canFastForward = (isJunior && !isRes && se.round < se.cal.length - 1) || (isRes && !isCallUp) || (isBoss && se.round < se.cal.length - 1);
 
       return h('div', { class: 'screen' }, ui.head(cc.name, `${cat.name} · ${s.year}`), h('div', { class: 'cols2' }, info, dec),
         ui.panel({ cls: 'cta' },
@@ -172,7 +204,7 @@
           ),
           h('div', { class: 'row' },
             canFastForward ? ui.btn(isRes ? 'Simular até convocação' : 'Simular até momento-chave', fastForward, '', false, 'right') : null,
-            ui.btn(isRes && !isCallUp ? 'Acompanhar GP' : rest ? 'Descansar' : 'Largar', go, 'primary lg', false, rest ? 'heart' : 'play')
+            ui.btn(isBoss ? 'Disputar GP (Pit Wall)' : isRes && !isCallUp ? 'Acompanhar GP' : rest ? 'Descansar' : 'Largar', go, 'primary lg', false, isBoss ? 'flag' : rest ? 'heart' : 'play')
           )
         )
       );

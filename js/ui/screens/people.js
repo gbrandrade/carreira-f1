@@ -164,9 +164,42 @@
       );
 
       const half = inSeason && s.season.round <= Math.floor(s.season.cal.length / 2);
-      const dev = ui.panel({ title: 'Desenvolvimento do carro' },
-        h('div', { class: 'small mut' }, 'Uma vez por temporada, dê o seu pitaco sobre onde a equipe deve evoluir. O efeito aparece no meio do ano e depende da relação com o engenheiro.'),
-        FOCUS.map(([f, d]) => h('button', { class: 'opt ' + (p.devFocus === f ? 'on' : ''), disabled: half ? null : 'disabled', style: { opacity: half ? 1 : .45 }, onclick: () => { p.devFocus = f; S.news.add(`Você pediu foco em ${f.toLowerCase()} no carro.`); ui.refresh(); } }, h('b', null, f), h('span', null, d))),
+      const curTeam = p.teamId ? S.world.team(s, p.catId, p.teamId) : null;
+      const carParts = curTeam ? S.world.ensureCarParts(curTeam) : null;
+      const startParts = (curTeam && curTeam.seasonStartParts) || carParts;
+      const PART_LABELS = [
+        ['aero', 'Aerodinâmica'],
+        ['power', 'Motor'],
+        ['rel', 'Confiabilidade'],
+        ['chassis', 'Chassi e pneus'],
+        ['quali', 'Ritmo de classificação']
+      ];
+
+      const telemetryBox = (curTeam && carParts)
+        ? h('div', { class: 'col', style: { gap: '.28rem', padding: '.45rem .55rem', borderRadius: '.6rem', background: 'var(--surface-2)', border: '1px solid var(--line)' } },
+            h('div', { class: 'row between' },
+              h('span', { class: 'pt' }, `Telemetria · ${curTeam.name}`),
+              ui.badge(`CAR OVR ${curTeam.car.toFixed(1)}`, 'acc')
+            ),
+            PART_LABELS.map(([k, label]) => {
+              const v = carParts[k] || 70;
+              const d = Math.round((v - (startParts[k] || v)) * 10) / 10;
+              return h('div', { class: 'row between tiny' },
+                h('span', { class: 'mut', style: { width: '7.8rem' } }, label),
+                h('div', { class: 'grow' }, ui.meter(v, { max: 99, segments: 16 })),
+                h('span', { class: 'mono', style: { width: '3.8rem', textAlign: 'right' } },
+                  Math.round(v),
+                  d > 0 ? h('span', { class: 'ok' }, ` +${d.toFixed(1)}`) : ''
+                )
+              );
+            })
+          )
+        : null;
+
+      const dev = ui.panel({ title: 'Desenvolvimento & Telemetria do Carro' },
+        telemetryBox,
+        h('div', { class: 'tiny mut' }, 'Direcione o pacote de evolução do meio do ano para um subsistema específico:'),
+        FOCUS.map(([f, d]) => h('button', { class: 'opt ' + (p.devFocus === f ? 'on' : ''), style: { padding: '.42rem .6rem', opacity: half ? 1 : .45 }, disabled: half ? null : 'disabled', onclick: () => { p.devFocus = f; S.news.add(`Você pediu foco em ${f.toLowerCase()} no carro.`); ui.refresh(); } }, h('b', null, f), h('span', null, d))),
         h('div', { class: 'grow' }),
         h('div', { class: 'tiny ' + (half ? 'dim' : 'warn') }, half ? (p.devFocus ? `Foco escolhido: ${p.devFocus}` : 'Escolha o foco até o meio da temporada.') : 'Disponível apenas até a metade da temporada.')
       );
