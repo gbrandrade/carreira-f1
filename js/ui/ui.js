@@ -26,6 +26,16 @@
     if (!full) ui.renderChrome();
   };
 
+  function feedTag(txt) {
+    const t = String(txt || '');
+    if (/^F1\b|F1:|CONVOCAÇÃO F1|Estreia na F1|era técnica/.test(t)) return 'F1';
+    if (/Contrato|oferta|academia|Reserva/.test(t)) return 'CONTRATO';
+    if (/Patrocínio|FALÊNCIA|US\$|Investimento/.test(t)) return 'FINANÇAS';
+    if (/Conquista|CAMPEÃO|superlicença/.test(t)) return 'MARCO';
+    if (/Desenvolvimento/.test(t)) return 'TÉCNICO';
+    return 'PADDOCK';
+  }
+
   ui.renderChrome = function () {
     const s = Game.state; if (!s || !s.player) return;
     const p = s.player, ger = S.contracts.ger(s), cat = C[p.catId];
@@ -40,7 +50,7 @@
       h('span', { class: 'pill' }, h('b', null, cat.short), p.contract ? ' · ' + p.contract.teamName : ''), h('span', { class: 'pill' }, 'GER ', ui.rate(ger)),
       h('span', { class: 'pill' }, ui.icon('wallet', 13), h('b', { class: p.money < 0 ? 'bad' : '' }, U.fmtMoney(p.money))));
     const feed = document.getElementById('feed'); feed.innerHTML = '';
-    feed.append(ui.panel({ title: 'Atividade', cls: 'grow' }, s.news.slice(0, 8).map(n => h('div', { class: 'feed-item ' + n.kind }, h('span', { class: 'dot' }), h('div', null, h('div', { class: 'y' }, n.y), h('div', { class: 't' }, n.text))))));
+    feed.append(ui.panel({ title: 'Atividade', cls: 'grow' }, s.news.slice(0, 8).map(n => h('div', { class: 'feed-item ' + n.kind }, h('span', { class: 'dot' }), h('div', null, h('div', { class: 'y' }, h('span', { class: 'feed-tag' }, feedTag(n.text)), n.y), h('div', { class: 't' }, n.text))))));
   };
 
   // modal: actions=[{label, cls, fn, icon}] · stack=true empilha como lista de opções

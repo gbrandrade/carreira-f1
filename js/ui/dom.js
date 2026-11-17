@@ -70,5 +70,23 @@
   };
   ui.tabs = (list, active, onPick) => h('div', { class: 'seg' }, list.map(([id, label]) => h('button', { class: id === active ? 'on' : '', onclick: () => onPick(id) }, label)));
   ui.seg = ui.tabs;
+
+  ui.teamColor = function (teamId, catId) {
+    const s = Game.state;
+    const cat = catId || (s && s.player && s.player.catId) || 'f1';
+    const list = (s && s.world && s.world.teams && s.world.teams[cat]) || Game.data.teams[cat] || [];
+    const found = list.find(t => t.id === teamId);
+    if (found && found.color) return found.color;
+    let hs = 0;
+    for (const ch of String(teamId || 't')) hs = (hs * 31 + ch.charCodeAt(0)) >>> 0;
+    const palette = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16'];
+    return palette[hs % palette.length];
+  };
+  ui.teamChip = (name, teamId, catId) => h('span', { class: 'tchip' },
+    h('i', { class: 'tbar', style: { background: ui.teamColor(teamId, catId) } }),
+    h('span', { class: 'tname' }, name)
+  );
+  ui.tyreRing = (color, code) => h('span', { class: 'tyre-ring', style: { '--tc': color } }, code);
+
   ui.F = n => Math.round(n);
 })();

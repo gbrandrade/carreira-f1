@@ -50,6 +50,7 @@
         Game.systems.news.add(`F1: ${t.name} passa a competir como ${era.name}.`);
       }
       t.name = era.name;
+      if (era.color) t.color = era.color;
       if (era.prestige != null) t.prestige = era.prestige;
       if (era.cars && era.cars[y] != null && y <= cfg.dataYear) {
         t.car = era.cars[y];
