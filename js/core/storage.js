@@ -17,7 +17,7 @@
     importFile(file) {
       return new Promise((res, rej) => {
         const r = new FileReader();
-        r.onload = () => { try { const s = JSON.parse(r.result); s && s.player ? res(s) : rej(new Error('Arquivo inválido')); } catch (e) { rej(e); } };
+        r.onload = () => { try { const s = JSON.parse(r.result); if (s && s.player) { if (Game.systems && Game.systems.owner) Game.systems.owner.syncCustomTeam(s); res(s); } else rej(new Error('Arquivo inválido')); } catch (e) { rej(e); } };
         r.onerror = () => rej(new Error('Falha ao ler'));
         r.readAsText(file);
       });

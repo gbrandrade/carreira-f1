@@ -74,7 +74,7 @@
     })).sort((a, b) => b.v - a.v).map(x => x.id);
   };
 
-  Race.expected = function (entries, cat) {
+  Race.expected = function (entries, cat, circ) {
     const s = entries.map(e => ({ id: e.id, v: perf(e, cat, 'r', circ) })).sort((a, b) => b.v - a.v);
     return s.findIndex(x => x.id === 'player') + 1;
   };
@@ -92,7 +92,7 @@
     return { pts, dnfAt: dnf ? end : null };
   }
 
-  function buildRows(order, entries, cat, spec, ctx, tyre, risk) {
+  function buildRows(order, entries, cat, circ, spec, ctx, tyre, risk) {
     const fin = order.filter(r => !r.dnf).sort((a, b) => b.v - a.v);
     const out = order.filter(r => r.dnf).sort((a, b) => b.dnfLap - a.dnfLap);
     const sorted = fin.concat(out);
@@ -145,7 +145,7 @@
       return { id: e.id, e, gp, v, dnf, dnfLap: dnf ? R.int(1, cat.laps) : 0, pen, cause, stratInfo };
     });
 
-    const rows = buildRows(rawRes, entries, cat, spec, ctx, tyre, risk);
+    const rows = buildRows(rawRes, entries, cat, circ, spec, ctx, tyre, risk);
     const out2 = { id: spec.id, name: spec.name, grid, order: rows, wet, sc, player: null, _raw: rawRes, _spec: spec, _ctx: ctx };
     const me = rows.find(r => r.id === 'player');
     if (me) out2.player = Race.playerSummary(state, entries, rows, me, rawRes.find(r => r.id === 'player'), ctx, circ, tyre, sc, risk);
@@ -229,7 +229,7 @@
     pRaw.v += deltaV;
     const cat = Game.data.categories[state.season.catId];
     const ch = (mainRace._ctx && mainRace._ctx.choices) || {};
-    const rows = buildRows(mainRace._raw, week._entries, cat, mainRace._spec, mainRace._ctx, ch.tyre != null ? ch.tyre : 1, ch.risk != null ? ch.risk : 1);
+    const rows = buildRows(mainRace._raw, week._entries, cat, circ, mainRace._spec, mainRace._ctx, ch.tyre != null ? ch.tyre : 1, ch.risk != null ? ch.risk : 1);
     mainRace.order = rows;
     const me = rows.find(r => r.id === 'player');
     if (me) {
@@ -308,7 +308,7 @@
       sprint: cal.sprint,
       quali: q1,
       results,
-      expected: Race.expected(entries, cat),
+      expected: Race.expected(entries, cat, circ),
       risk: (choices && choices.risk != null) ? choices.risk : 1,
       midEvent,
       _entries: entries
