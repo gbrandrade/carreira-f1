@@ -33,7 +33,7 @@
   ui.icon = (n, s) => h('span', { class: 'ic', html: `<svg viewBox="0 0 24 24" width="${s || 16}" height="${s || 16}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${ICONS[n] || ''}"/></svg>` });
   ui.plate = (icon, color, big) => h('span', { class: 'plate' + (big ? ' lg' : ''), style: color ? { '--c': color } : null }, ui.icon(icon, big ? 22 : 17));
 
-  ui.btn = (label, fn, cls, dis, icon) => h('button', { class: 'btn ' + (cls || ''), onclick: fn, disabled: dis ? 'disabled' : null }, icon ? ui.icon(icon, 14) : null, label);
+  ui.btn = (label, fn, cls, dis, icon) => h('button', { class: 'btn ' + (cls || ''), onclick: e => { if (!dis) ui.sound('click'); if (fn) fn(e); }, disabled: dis ? 'disabled' : null }, icon ? ui.icon(icon, 14) : null, label);
   ui.panel = (o, ...kids) => { if (typeof o === 'string') o = { title: o }; return h('section', { class: 'panel ' + (o.cls || '') }, (o.title || o.right) ? h('div', { class: 'ph' }, h('span', { class: 'pt' }, o.title || ''), o.right || null) : null, ...kids); };
   ui.card = (t, ...k) => ui.panel({ title: t }, ...k);
   ui.badge = (t, cls) => h('span', { class: 'badge ' + (cls || '') }, t);
@@ -87,6 +87,57 @@
     h('span', { class: 'tname' }, name)
   );
   ui.tyreRing = (color, code) => h('span', { class: 'tyre-ring', style: { '--tc': color } }, code);
+
+
+  const KNOWN_CODES = {
+    'Max Verstappen': 'VER', 'Charles Leclerc': 'LEC', 'Lewis Hamilton': 'HAM', 'Lando Norris': 'NOR',
+    'Oscar Piastri': 'PIA', 'George Russell': 'RUS', 'Kimi Antonelli': 'ANT', 'Fernando Alonso': 'ALO',
+    'Lance Stroll': 'STR', 'Pierre Gasly': 'GAS', 'Franco Colapinto': 'COL', 'Alexander Albon': 'ALB',
+    'Carlos Sainz': 'SAI', 'Nico Hülkenberg': 'HUL', 'Gabriel Bortoleto': 'BOR', 'Esteban Ocon': 'OCO',
+    'Oliver Bearman': 'BEA', 'Liam Lawson': 'LAW', 'Isack Hadjar': 'HAD', 'Arvid Lindblad': 'LIN',
+    'Yuki Tsunoda': 'TSU', 'Sergio Pérez': 'PER', 'Valtteri Bottas': 'BOT', 'Daniel Ricciardo': 'RIC',
+    'Sebastian Vettel': 'VET', 'Kimi Räikkönen': 'RAI', 'Kevin Magnussen': 'MAG', 'Zhou Guanyu': 'ZHO',
+    'Logan Sargeant': 'SAR', 'Mick Schumacher': 'MSC', 'Nicholas Latifi': 'LAT', 'Romain Grosjean': 'GRO',
+    'Felipe Drugovich': 'DRU', 'Rafael Câmara': 'CAM', 'Caio Collet': 'COL', 'Enzo Fittipaldi': 'FIT'
+  };
+
+  ui.driverCode = function (name) {
+    if (!name) return 'DRV';
+    if (KNOWN_CODES[name]) return KNOWN_CODES[name];
+    const parts = String(name).trim().split(/\s+/);
+    const last = parts[parts.length - 1].normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z]/g, '');
+    return (last.slice(0, 3) || 'DRV').toUpperCase();
+  };
+  ui.dcode = name => h('span', { class: 'dcode' }, ui.driverCode(name));
+
+  let audioCtx = null;
+  ui.sound = function (type) {
+    if (ui.prefs && ui.prefs.sound === false) return;
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      if (!audioCtx) audioCtx = new AC();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const now = audioCtx.currentTime;
+      const tone = (freq, dur, delay, gainVal, wave) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = wave || 'sine';
+        osc.frequency.setValueAtTime(freq, now + (delay || 0));
+        gain.gain.setValueAtTime(gainVal || 0.03, now + (delay || 0));
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + (delay || 0) + dur);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now + (delay || 0));
+        osc.stop(now + (delay || 0) + dur);
+      };
+      if (type === 'click') tone(520, 0.045, 0, 0.02, 'triangle');
+      else if (type === 'start') { tone(440, 0.14, 0, 0.035); tone(440, 0.14, 0.22, 0.035); tone(880, 0.26, 0.44, 0.045); }
+      else if (type === 'radio') { tone(980, 0.07, 0, 0.03, 'square'); tone(740, 0.09, 0.09, 0.03, 'square'); }
+      else if (type === 'win') { tone(523.25, 0.14, 0, 0.04); tone(659.25, 0.14, 0.12, 0.04); tone(783.99, 0.28, 0.24, 0.05); }
+      else if (type === 'notify') tone(660, 0.09, 0, 0.025);
+    } catch (e) {}
+  };
 
   ui.F = n => Math.round(n);
 })();

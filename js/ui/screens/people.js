@@ -147,6 +147,23 @@
                   }, 'sm', false, 'users')
                 )
               : null),
+        h('div', { class: 'pt', style: { marginTop: '.2rem' } }, 'Staff Pessoal (Contratos Anuais)'),
+        h('div', { class: 'col', style: { gap: '.3rem' } }, (D.staff || []).map(st => {
+          const curLv = C[p.catId].level;
+          const owned = S.economy.owned(s, st.id);
+          const locked = !owned && (st.minLv || 0) > curLv;
+          return h('div', { class: 'row between tiny', style: { padding: '.32rem .5rem', borderRadius: '.45rem', background: 'var(--surface-2)', border: '1px solid var(--line)', opacity: locked ? .5 : 1 } },
+            h('div', null,
+              h('b', null, st.name),
+              h('div', { class: 'dim' }, `${st.desc} · ${Game.utils.fmtMoney(st.upkeep)}/ano`)
+            ),
+            locked
+              ? ui.badge(`Nv.${st.minLv}`)
+              : owned
+                ? ui.btn('Dispensar', () => { const r = S.economy.sell(s, st.id); if (r.msg) ui.toast(r.msg); ui.refresh(); }, 'sm ghost')
+                : ui.btn('Contratar', () => { const r = S.economy.buy(s, st.id); if (r.msg) ui.toast(r.msg, 'good'); ui.refresh(); }, 'sm primary')
+          );
+        })),
         h('div', { class: 'grow' }),
         h('div', { class: 'row', style: { flexWrap: 'wrap' } }, p.traits.map(id => ui.badge(D.traits.find(t => t.id === id).name, 'acc')))
       );

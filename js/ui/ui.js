@@ -9,7 +9,7 @@
   const TITLES = { hub: 'Central do piloto', season: 'Temporada', race: 'Corrida', contract: 'Contrato', team: 'Minha Escuderia', assets: 'Patrimônio', people: 'Pessoas e mídia', drivers: 'Pilotos', records: 'Recordes', career: 'Carreira' };
 
   // ---- temas (guardados à parte do save)
-  ui.prefs = { theme: 'dark', accent: 'red' };
+  ui.prefs = { theme: 'dark', accent: 'red', sound: true };
   try { Object.assign(ui.prefs, JSON.parse(localStorage.getItem('caminho-f1-ui') || '{}')); } catch (e) {}
   ui.applyPrefs = function () {
     document.documentElement.setAttribute('data-theme', ui.prefs.theme); document.documentElement.setAttribute('data-accent', ui.prefs.accent);
@@ -37,12 +37,36 @@
     return 'PADDOCK';
   }
 
+
+  function navHasAlert(s, id) {
+    const p = s.player;
+    if (!p) return false;
+    if (id === 'people') {
+      const inSeason = s.phase === 'season' && s.season;
+      const half = inSeason && s.season.round <= Math.floor(s.season.cal.length / 2);
+      const needsDev = half && !p.devFocus && !p.noSeat;
+      const acad = S.contracts.ensureAcademy(p);
+      const hasTest = inSeason && acad && (acad.f1TestsLeft || 0) > 0 && S.contracts.f1TestEligibility(s).tpcEligible;
+      return needsDev || hasTest;
+    }
+    if (id === 'contract') {
+      const hasMidOffers = s.phase === 'season' && s.midSeasonOffers && s.midSeasonOffers.length > 0;
+      const hasAcadOffers = s.academyOffers && s.academyOffers.length > 0;
+      const needsContract = s.phase === 'offseason' && !p.contract && !(S.owner && S.owner.isBossOnly(p));
+      return hasMidOffers || hasAcadOffers || needsContract;
+    }
+    if (id === 'team') {
+      return !(S.owner && S.owner.hasTeam(p)) && p.money >= (S.owner ? S.owner.FOUND_COST : 5e8);
+    }
+    return false;
+  }
+
   ui.renderChrome = function () {
     const s = Game.state; if (!s || !s.player) return;
     const p = s.player, ger = S.contracts.ger(s), cat = C[p.catId];
     const rail = document.getElementById('rail'); rail.innerHTML = '';
     rail.append(h('div', { class: 'brand' }, h('span', { class: 'logo' }, 'F1'), h('span', null, 'Caminho')));
-    NAV.forEach(([g, items]) => { rail.append(h('div', { class: 'navh' }, g)); items.forEach(([id, label, ic]) => rail.append(h('button', { class: 'nav ' + (ui.current === id ? 'active' : ''), onclick: () => ui.go(id) }, ui.icon(ic, 16), label))); });
+    NAV.forEach(([g, items]) => { rail.append(h('div', { class: 'navh' }, g)); items.forEach(([id, label, ic]) => rail.append(h('button', { class: 'nav ' + (ui.current === id ? 'active' : ''), onclick: () => ui.go(id) }, ui.icon(ic, 16), label, navHasAlert(s, id) ? h('span', { class: 'nav-dot', title: 'Ação disponível' }) : null))); });
     rail.append(h('div', { class: 'rail-foot' }, h('button', { class: 'nav', onclick: () => { ui.prefs.theme = ui.prefs.theme === 'dark' ? 'light' : 'dark'; ui.applyPrefs(); ui.refresh(); } }, ui.icon(ui.prefs.theme === 'dark' ? 'sun' : 'moon', 16), ui.prefs.theme === 'dark' ? 'Tema claro' : 'Tema escuro'),
       h('button', { class: 'nav', onclick: () => { S.career.save(); ui.toast('Jogo salvo'); } }, ui.icon('save', 16), 'Salvar'), h('button', { class: 'nav', onclick: () => ui.settings() }, ui.icon('menu', 16), 'Menu')));
     const top = document.getElementById('topbar'); top.innerHTML = '';
@@ -63,17 +87,21 @@
     ov.append(box); root.append(ov);
     return { close, box };
   };
-  ui.toast = function (t) { const el = h('div', { class: 'toast' }, ui.icon('check', 14), t); document.getElementById('toast').append(el); setTimeout(() => el.remove(), 3300); };
+  ui.toast = function (t, kind) { const ic = kind === 'bad' ? 'alert' : kind === 'warn' ? 'bolt' : 'check'; const el = h('div', { class: 'toast ' + (kind || '') }, ui.icon(ic, 14), t); document.getElementById('toast').append(el); setTimeout(() => el.remove(), 3700); };
   ui.confirm = (title, text, yes) => ui.modal({ title, body: text, actions: [{ label: 'Cancelar' }, { label: 'Confirmar', cls: 'primary', fn: () => { yes(); } }] });
 
-  // eventos aleatórios em sequência
+  // eventos aleatórios em sequência com feedback direto por toast colorido (sem segundo modal redundante)
   ui.runEvents = function (list, done) {
     const s = Game.state, next = i => {
       if (i >= list.length) return done();
       const ev = list[i];
       ui.modal({ title: ev.title, body: h('div', { class: 'row', style: { alignItems: 'flex-start' } }, ui.plate('bolt', null, true), h('div', { class: 'mut' }, ev.text)), stack: true, actions: ev.choices.map((c, idx) => ({ label: c.label, icon: 'right', fn: () => {
         const r = S.pressure.resolve(s, ev, idx);
-        ui.modal({ title: ev.title, body: h('div', { class: 'col' }, h('div', null, r.text || 'Sem efeitos.'), r.extra ? h('div', { class: 'warn' }, r.extra) : null), actions: [{ label: 'Continuar', cls: 'primary', fn: () => { ui.renderChrome(); next(i + 1); } }] });
+        const summary = [r.text, r.extra].filter(Boolean).join(' · ') || 'Decisão registrada.';
+        const kind = r.extra ? 'bad' : (summary.includes('-') && !summary.includes('+') ? 'warn' : 'good');
+        ui.toast(summary, kind);
+        ui.renderChrome();
+        next(i + 1);
       } })) });
     };
     next(0);
@@ -97,6 +125,7 @@
     const accents = [['red', 'Vermelho'], ['papaya', 'Papaya'], ['teal', 'Petronas'], ['blue', 'Azul']];
     const body = h('div', { class: 'col', style: { gap: '.7rem' } }, file,
       h('div', { class: 'row between' }, h('span', { class: 'mut' }, 'Tema'), ui.tabs([['dark', 'Escuro'], ['light', 'Claro']], ui.prefs.theme, t => { ui.prefs.theme = t; ui.applyPrefs(); document.querySelectorAll('.overlay').forEach(o => o.remove()); ui.refresh(); ui.settings(); })),
+      h('div', { class: 'row between' }, h('span', { class: 'mut' }, 'Efeitos sonoros'), ui.tabs([[true, 'Ligado'], [false, 'Mudo']], ui.prefs.sound !== false, v => { ui.prefs.sound = v; ui.applyPrefs(); document.querySelectorAll('.overlay').forEach(o => o.remove()); ui.refresh(); ui.settings(); })),
       h('div', { class: 'row between' }, h('span', { class: 'mut' }, 'Cor de destaque'), ui.tabs(accents, ui.prefs.accent, t => { ui.prefs.accent = t; ui.applyPrefs(); document.querySelectorAll('.overlay').forEach(o => o.remove()); ui.refresh(); ui.settings(); })),
       h('div', { class: 'row' }, ui.btn('Salvar agora', () => { S.career.save(); ui.toast('Jogo salvo'); }, '', false, 'save'), ui.btn('Exportar', () => Game.core.storage.exportFile(s), '', false, 'download'), ui.btn('Importar', () => file.click(), '', false, 'swap')));
     ui.modal({ title: 'Menu', body, actions: [{ label: 'Voltar ao menu principal', fn: () => { S.career.save(); ui.go('menu'); } }, { label: 'Fechar', cls: 'primary' }] });

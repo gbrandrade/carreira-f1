@@ -4,7 +4,7 @@
   const E = Game.systems.economy = {};
   const lvScale = (def, lv) => def.staff ? 1 : 1 + .5 * (lv - 1);
 
-  E.def = id => D.assets.find(a => a.id === id);
+  E.def = id => D.assets.find(a => a.id === id) || (D.staff || []).find(a => a.id === id);
   E.owned = (s, id) => s.player.assets.find(a => a.id === id);
   E.upgradeCost = (def, lv) => Math.round(def.price * .5 * lv);
 
@@ -36,13 +36,21 @@
   E.effects = function (s) {
     const f = { mental: 0, phys: 0, pop: 0, train: 0, media: 1 };
     s.player.assets.forEach(a => {
-      const d = E.def(a.id), k = lvScale(d, a.lv);
+      const d = E.def(a.id); if (!d) return;
+      const k = lvScale(d, a.lv);
       Object.keys(d.fx).forEach(x => { if (x === 'media') f.media *= d.fx[x]; else f[x] += d.fx[x] * k; });
     });
     return f;
   };
 
-  E.upkeep = s => U.sum(s.player.assets.map(a => { const d = E.def(a.id); return d.upkeep * (d.staff ? 1 : 1 + .3 * (a.lv - 1)); }));
+  E.lifestyleCost = s => {
+    const p = s.player;
+    if (!p || (p.catId !== 'f1' && !(s.flags && s.flags.wasF1))) return 0;
+    const titles = (p.f1 && p.f1.titles) || 0;
+    const pop = p.popularity || 10;
+    return Math.round((350000 + pop * 12000 + titles * 450000) / 10000) * 10000;
+  };
+  E.upkeep = s => U.sum(s.player.assets.map(a => { const d = E.def(a.id); return d ? d.upkeep * (d.staff ? 1 : 1 + .3 * (a.lv - 1)) : 0; })) + E.lifestyleCost(s);
 
   E.invest = function (s, id, amount) {
     const p = s.player;
@@ -270,6 +278,11 @@
 
     const remainingSponsors = [];
     p.sponsors.forEach(x => {
+      const sp0 = D.sponsors.find(y => y.id === x.id);
+      if (sp0 && (p.fired || ((p.reputation || 45) < 25 && R.chance(0.45)))) {
+        Game.systems.news.both(`PATROCÍNIO ROMPIDO: A ${sp0.name} encerrou o contrato antecipadamente devido à crise de imagem.`, 'bad');
+        return;
+      }
       const sp = D.sponsors.find(y => y.id === x.id);
       if (!sp) return;
       const met = E.goalMet(s, x);

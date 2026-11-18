@@ -239,7 +239,31 @@
       );
 
       let right;
-      if (s.phase === 'season') right = ui.panel({ title: 'Ofertas', cls: 'grow' }, h('div', { class: 'empty' }, ui.plate('clock', null, true), h('div', null, 'Novas ofertas de equipe só aparecem na entressafra.')));
+      const midOffers = s.midSeasonOffers || [];
+      if (s.phase === 'season' && midOffers.length) {
+        right = ui.panel({ title: `Mercado no Meio da Temporada (para ${s.year + 1})`, right: ui.badge('PROPOSTAS ANTECIPADAS', 'acc') },
+          h('div', { class: 'small mut' }, 'Você recebeu propostas antecipadas para a próxima temporada. Assinar garante sua vaga antes da entressafra:'),
+          midOffers.map(o => {
+            const t = o.terms, afford = S.contracts.canAfford(s, o);
+            return h('div', { class: 'offer' },
+              h('div', { class: 'row between' },
+                ui.teamChip(o.teamName, o.teamId, o.catId),
+                ui.badge(o.note || 'Pré-contrato', 'acc')
+              ),
+              ui.bar('Carro', o.car, { auto: false, text: o.car }),
+              h('div', { class: 'kv3' }, [
+                ['Duração', t.years + ' ano(s)'],
+                [salLabel(t), M(Math.abs(t.salary))],
+                ['Bônus título', M(t.bTitle)]
+              ].map(([k, v]) => h('div', null, h('div', { class: 'k' }, k), h('div', { class: 'v' }, v)))),
+              h('div', { class: 'row' },
+                ui.btn(`Assinar para ${s.year + 1}`, () => { const r = S.contracts.acceptMidSeasonOffer(s, o); ui.toast(r.msg, r.ok ? 'good' : 'bad'); ui.refresh(); }, 'primary sm', !afford, 'check'),
+                ui.btn(o.tried ? 'Negociada' : 'Negociar', () => negotiate(o), 'sm', o.tried || !afford, 'swap')
+              )
+            );
+          })
+        );
+      } else if (s.phase === 'season') right = ui.panel({ title: 'Ofertas', cls: 'grow' }, h('div', { class: 'empty' }, ui.plate('clock', null, true), h('div', null, p.nextContract ? `Pré-contrato já assinado com ${p.nextContract.teamName} para ${s.year + 1}.` : 'Novas ofertas de equipe aparecem no meio da temporada ou na entressafra.')));
       else if (!s.offers.length) right = ui.panel({ title: 'Ofertas', cls: 'grow' }, h('div', { class: 'empty' }, ui.plate('lock', null, true), h('div', null, c ? 'Seu contrato continua válido. Sem cláusula de saída, não há ofertas de outras equipes.' : 'Nenhuma oferta disponível.')));
       else right = ui.panel({ title: `Ofertas para ${s.year}`, right: p.forcedUp ? ui.badge('você precisa subir de categoria', 'warn') : null }, ui.paged('offers', s.offers, 3, items => items.map(o => offerCard(o, s))));
 

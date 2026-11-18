@@ -273,7 +273,41 @@
 
   ui.hbars = function (rows, o) {
     const max = (o && o.max) || Math.max(1, ...rows.map(r => r.value));
-    return h('div', { class: 'col', style: { gap: '.35rem' } }, rows.map(r => h('div', { class: 'hbar' + (r.me ? ' me' : '') }, h('span', null, r.label), h('div', { class: 't' }, h('div', { class: 'f', style: { width: (r.value / max * 100) + '%' } })), h('span', null, r.value))));
+    return h('div', { class: 'col', style: { gap: '.35rem' } }, rows.map(r => h('div', { class: 'hbar' + (r.me ? ' me' : '') },
+      h('span', null, r.label),
+      h('div', { class: 't' }, h('div', { class: 'f', style: { width: (r.value / max * 100) + '%', background: r.color || (r.me ? 'var(--accent)' : 'var(--text-3)') } })),
+      h('span', null, r.value)
+    )));
+  };
+
+  ui.careerChart = function (history) {
+    const list = (history || []).slice(-14);
+    if (!list.length) return h('div', { class: 'empty small dim' }, 'Complete sua primeira temporada para visualizar o gráfico de evolução.');
+    const W = 460, H = 145, L = 30, Rr = 16, T = 16, B = 22;
+    const n = list.length;
+    const xs = i => n === 1 ? (L + W - Rr) / 2 : L + (W - L - Rr) * i / (n - 1);
+    const yGer = g => T + (H - T - B) * (100 - cl(g, 40, 100)) / 60;
+    const pts = list.map((it, i) => [xs(i), yGer(it.ger)]);
+    const poly = pts.map(p => p.map(v => v.toFixed(1)).join(',')).join(' ');
+    let s = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">`;
+    [50, 75, 100].forEach(g => {
+      s += `<line x1="${L}" x2="${W - Rr}" y1="${yGer(g)}" y2="${yGer(g)}" stroke="var(--line)" stroke-width="1"/>`;
+      s += `<text x="${L - 5}" y="${yGer(g) + 3}" text-anchor="end" font-size="7.5" font-family="var(--mono)" fill="var(--text-3)">${g}</text>`;
+    });
+    if (pts.length > 1) {
+      s += `<polyline points="${poly}" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`;
+    }
+    list.forEach((it, i) => {
+      const [x, y] = pts[i];
+      s += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.6" fill="var(--accent)" stroke="var(--surface)" stroke-width="1.5"/>`;
+      s += `<text x="${x.toFixed(1)}" y="${(y - 7).toFixed(1)}" text-anchor="middle" font-size="7.5" font-weight="700" font-family="var(--mono)" fill="var(--text)">${it.ger}</text>`;
+      if (it.pos != null) {
+        s += `<text x="${x.toFixed(1)}" y="${(y + 12).toFixed(1)}" text-anchor="middle" font-size="6.8" font-family="var(--mono)" fill="var(--ok)">${it.pos}º</text>`;
+      }
+      s += `<text x="${x.toFixed(1)}" y="${H - 5}" text-anchor="middle" font-size="7" font-family="var(--mono)" fill="var(--text-3)">${String(it.year).slice(-2)}</text>`;
+    });
+    s += `</svg>`;
+    return svgWrap('area', s);
   };
 
   ui.dots = function () { const cells = []; for (let y = 0; y < 5; y++) for (let x = 0; x < 5; x++) cells.push(h('i', { style: { animationDelay: ((Math.abs(x - 2) + Math.abs(y - 2)) * .12) + 's' } })); return h('div', { class: 'dots' }, cells); };

@@ -1,12 +1,9 @@
-/* Patrimônio. minLv = nível mínimo de categoria para desbloquear (0 kart .. 8 F1).
-   fx por etapa: mental/phys = recuperação; por ano: pop (popularidade), train (evolução), rep (reputação). */
+/* Patrimônio físico (bens) e Staff pessoal (gerido em Pessoas e mídia).
+   minLv = nível mínimo de categoria para desbloquear (0 kart .. 8 F1). */
 Game.data.assets = [
   { id: 'sim1', type: 'Simulador', name: 'Simulador básico', price: 30000, upkeep: 2000, minLv: 0, fx: { train: .4 }, desc: '+ evolução anual' },
   { id: 'apto', type: 'Casa', name: 'Apartamento em São Paulo', price: 200000, upkeep: 8000, minLv: 0, fx: { mental: 1.5 }, desc: '+ recuperação mental' },
   { id: 'esportivo', type: 'Carro', name: 'Carro esportivo', price: 150000, upkeep: 5000, minLv: 2, fx: { pop: 1.5 }, desc: '+ popularidade' },
-  { id: 'prep', type: 'Equipe', name: 'Preparador físico', price: 0, upkeep: 80000, minLv: 2, fx: { phys: 3 }, desc: '+ recuperação física', staff: true },
-  { id: 'psi', type: 'Equipe', name: 'Psicólogo esportivo', price: 0, upkeep: 60000, minLv: 3, fx: { mental: 3 }, desc: '+ recuperação mental', staff: true },
-  { id: 'assessor', type: 'Equipe', name: 'Assessor de imprensa', price: 0, upkeep: 40000, minLv: 3, fx: { media: 1.3 }, desc: '+ ganhos de popularidade', staff: true },
   { id: 'sim2', type: 'Simulador', name: 'Simulador profissional', price: 300000, upkeep: 20000, minLv: 4, fx: { train: 1.0 }, desc: '++ evolução anual' },
   { id: 'super', type: 'Carro', name: 'Supercarro', price: 600000, upkeep: 15000, minLv: 5, fx: { pop: 3 }, desc: '++ popularidade' },
   { id: 'casa', type: 'Casa', name: 'Casa de alto padrão', price: 3000000, upkeep: 80000, minLv: 5, fx: { mental: 3, pop: 1.5 }, desc: '++ recuperação mental' },
@@ -19,6 +16,12 @@ Game.data.assets = [
   { id: 'ilha', type: 'Casa', name: 'Ilha Privada no Caribe', price: 120000000, upkeep: 4500000, minLv: 8, fx: { mental: 6, pop: 8 }, desc: 'refúgio exclusivo de lenda' },
   { id: 'equipe_base', type: 'Equipe', name: 'Equipe Satélite de F2/F3', price: 250000000, upkeep: 12000000, minLv: 8, fx: { rep: 6, pop: 6, train: 0.8 }, desc: 'sua própria escuderia de base' },
   { id: 'holding_f1', type: 'Equipe', name: 'Participação Acionária na F1', price: 650000000, upkeep: 25000000, minLv: 8, fx: { rep: 10, pop: 10 }, desc: 'sócio minoritário do paddock' }
+];
+
+Game.data.staff = [
+  { id: 'prep', type: 'Equipe', name: 'Preparador físico', role: 'Fisiologia e resistência', price: 0, upkeep: 80000, minLv: 2, fx: { phys: 3 }, desc: '+3 recuperação física por etapa', staff: true },
+  { id: 'psi', type: 'Equipe', name: 'Psicólogo esportivo', role: 'Foco e controle emocional', price: 0, upkeep: 60000, minLv: 3, fx: { mental: 3 }, desc: '+3 recuperação mental por etapa', staff: true },
+  { id: 'assessor', type: 'Equipe', name: 'Assessor de imprensa', role: 'Gestão de imagem e mídia', price: 0, upkeep: 40000, minLv: 3, fx: { media: 1.3 }, desc: '+30% ganhos de popularidade', staff: true }
 ];
 
 Game.data.investments = [

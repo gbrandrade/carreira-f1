@@ -49,7 +49,7 @@
       h2h: { qualiW: 0, qualiL: 0, raceW: 0, raceL: 0, mateId: null, mateName: '' },
       teamRole: 'Igualdade',
       stats: { races: 0, wins: 0, podiums: 0, poles: 0, fl: 0, points: 0, titles: 0, dnfs: 0, seasons: 0 },
-      f1: { races: 0, wins: 0, podiums: 0, poles: 0, fl: 0, points: 0, titles: 0 }, titlesList: [], f1TeamsChamp: [], wonCircuits: [], superPoints: [], singleSeaterSeasons: 0, rival: null, ownedTeam: null,
+      f1: { races: 0, wins: 0, podiums: 0, poles: 0, fl: 0, points: 0, titles: 0 }, titlesList: [], f1TeamsChamp: [], wonCircuits: [], history: [], superPoints: [], singleSeaterSeasons: 0, rival: null, ownedTeam: null,
       lastSeason: null, season: null, ach: {}, flags: {}, academy: null, fired: false, forcedUp: false, noSeat: false, firedCount: 0
     };
     S.world.init(s);
@@ -148,11 +148,22 @@
 
     const week = S.race.simulateWeekend(s, entries, cat, cal, choices, {
       racingInjured: injured && !rest,
-      allowMidRace: !rest && !!choices.interactive && cat.level >= 7
+      allowMidRace: !rest && !!choices.interactive && cat.level >= 7,
+      splitSprint: !rest && !!choices.interactive && cat.id === 'f1' && !!cal.sprint
     });
     week.rest = rest;
     week.reserveRacing = reserveRacing;
     return week;
+  };
+
+
+  Car.continueSplitGP = function (week, newChoices) {
+    const s = Game.state, p = s.player;
+    const injured = p.injury > 0;
+    return S.race.appendMainGP(s, week, newChoices, {
+      racingInjured: injured && !week.rest,
+      allowMidRace: !week.rest && C[s.season.catId].level >= 7
+    });
   };
 
   /* Consolida pontos, estatísticas, H2H e evolução dinâmica após o resultado final da etapa. */
@@ -229,7 +240,19 @@
         S.news.both(`Estreia na F1 em ${cal.circuit.name}!`, 'good');
         if (s.year - p.birth <= 18) s.flags.prodigy = true;
       }
-      if (injured) { p.injury = 0; p.phys = cl(p.phys - 8, 0, 100); }
+      if (injured) {
+        const crashedWhileInj = week.results.some(r => r.player && r.player.dnf && r.player.crash);
+        if (crashedWhileInj) {
+          S.attributes.growCap(p, 'RIT', -1.5);
+          S.attributes.growCap(p, 'ATE', -1.0);
+          p.injury = 2;
+          p.phys = cl(p.phys - 18, 0, 100);
+          S.news.both(`AGRAVAMENTO DE LESÃO: Você bateu correndo lesionado em ${cal.circuit.name}! Sequela permanente no ritmo (-RIT/-ATE) e +2 etapas fora.`, 'bad');
+        } else {
+          p.injury = 0;
+          p.phys = cl(p.phys - 8, 0, 100);
+        }
+      }
       S.pressure.afterRace(s, week);
       if (S.owner) S.owner.updateRival(s, week);
     } else {
@@ -287,9 +310,10 @@
   };
 
   /* Simula etapas até o próximo momento-chave (Meio de temporada / Reta final) na base, ou até convocação como Reserva F1. */
-  Car.fastForwardToMilestone = function (s) {
+  Car.fastForwardToMilestone = function (s, mode) {
     const se = s.season, p = s.player, cat = C[se.catId];
     if (!se || se.finished || p.noSeat) return null;
+    mode = mode || 'balanced';
 
     const isRes = Car.isReserve(p);
     if (se.round >= se.cal.length - 1 && !isRes) return null;
@@ -305,11 +329,14 @@
       }
       const cal = se.cal[se.round];
       const circ = cal.circuit;
-      Car.playRound({ tyre: 1, setup: circ.prof, risk: 1, raceInjured: false });
+      const ffTyre = mode === 'safe' ? 0 : mode === 'push' ? 2 : 1;
+      const ffRisk = mode === 'safe' ? 0 : mode === 'push' ? 2 : 1;
+      Car.playRound({ tyre: ffTyre, setup: circ.prof, risk: ffRisk, raceInjured: false });
       count++;
       if (se.round === Math.floor(se.cal.length / 2)) {
         Car.applyDevFocusUpgrade(s);
         S.world.midSeasonSackings(s);
+        if (S.contracts && S.contracts.checkMidSeasonRenewal) S.contracts.checkMidSeasonRenewal(s);
       }
     }
 
@@ -351,6 +378,7 @@
     if (se.round === Math.floor(se.cal.length / 2)) {
       Car.applyDevFocusUpgrade(s);
       S.world.midSeasonSackings(s);
+      if (S.contracts && S.contracts.checkMidSeasonRenewal) S.contracts.checkMidSeasonRenewal(s);
     }
     if (!p.noSeat) out.events = S.pressure.rollEvents(s);
     Car.save();
@@ -433,8 +461,20 @@
       : `${year} ${cat.short}: ${played ? pos + 'º lugar, ' + (me ? me.pts : 0) + ' pts' : 'temporada perdida'}${champ ? ' · CAMPEÃO!' : ''}.`;
     S.news.both(statusLine, champ ? 'good' : '');
     p.lastSeason = { pos, champ, pts: me ? me.pts : 0, catId: cat.id, year, reserve };
+    if (!p.history) p.history = [];
+    p.history.push({
+      year,
+      ger: S.contracts.ger(s),
+      pos: played ? pos : null,
+      catShort: cat.short,
+      pts: me ? me.pts : 0
+    });
 
-    if (p.contract) {
+    if (p.nextContract) {
+      p.contract = Object.assign({}, p.nextContract);
+      p.nextContract = null;
+      s.midSeasonOffers = [];
+    } else if (p.contract) {
       if (S.owner && S.owner.hasTeam(p) && p.contract.teamId === p.ownedTeam.id) {
         p.contract.years = 5;
       } else {
@@ -442,6 +482,7 @@
         if (p.contract.years <= 0) p.contract = null;
       }
     }
+    s.midSeasonOffers = [];
     const acad = S.contracts.ensureAcademy(p);
     if (acad) {
       // Penalidade se não cumpriu compromissos de mídia/propaganda da academia

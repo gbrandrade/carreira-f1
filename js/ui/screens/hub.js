@@ -64,7 +64,13 @@
         art = ui.track(n.circuit.id);
         if (isRes) rightTag = se.reserveCallUp ? ui.badge('convocado!', 'ok') : ui.badge('reserva', 'info');
         else if (S.career.isKeyJuniorRound(s)) rightTag = ui.badge('momento-chave', 'acc');
-        info = h('div', { class: 'row' }, ui.badge(n.circuit.rain + '% chuva', n.circuit.rain >= 30 ? 'warn' : ''), ui.ccode(n.circuit.country));
+        const rivRank = p.rival ? S.race.ranked(se).find(x => x.id === p.rival.id) : null;
+        info = h('div', { class: 'row', style: { flexWrap: 'wrap' } },
+          ui.ccode(n.circuit.country),
+          ui.badge(`${cat.laps} voltas`),
+          ui.badge(n.circuit.rain >= 35 ? `${n.circuit.rain}% chuva` : n.circuit.rain >= 15 ? 'Clima instável' : 'Tempo firme', n.circuit.rain >= 35 ? 'warn' : ''),
+          rivRank ? ui.badge(`Rival ${ui.driverCode(rivRank.name)} (${rivRank.pos}º)`, 'acc') : null
+        );
         btn = ui.btn(isRes && !se.reserveCallUp ? 'Ir para fim de semana' : 'Próxima etapa', () => ui.go('race'), 'primary lg', false, 'flag');
       }
       return ui.panel({ title: 'Próximo passo', cls: 'marks', right: rightTag },

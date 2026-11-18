@@ -7,7 +7,7 @@
       const s = Game.state, se = s.season;
       if (!se) return h('div', { class: 'screen' }, ui.head('Temporada'), ui.panel({ cls: 'grow' }, h('div', { class: 'empty' }, ui.plate('calendar', null, true), h('h3', null, 'A temporada ainda não começou'), h('div', null, 'Assine um contrato e inicie o ano.'), ui.btn('Ir para Contrato', () => ui.go('contract'), 'primary', false, 'doc'))));
       const tab = ui.seasonTab, cat = C[se.catId], r = S.race.ranked(se), me = r.find(x => x.id === 'player');
-      const nm = x => h('span', { class: 'row gap-s' }, ui.ccode(x.country), x.name);
+      const nm = x => h('span', { class: 'row gap-s' }, ui.dcode(x.name), h('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis' } }, x.name));
       let body;
       if (tab === 'pilotos') {
         const top = r.slice(0, 12), rows = top.map(x => ({ me: x.id === 'player', cells: [ui.posCell(x.pos), nm(x), ui.teamChip(x.teamName, x.teamId, se.catId), h('b', null, x.pts), x.wins, x.podiums] }));
@@ -22,7 +22,12 @@
       const right = h('div', { class: 'col', style: { gap: '.7rem' } },
         ui.panel({ title: 'Você no campeonato', cls: 'marks' }, h('div', { class: 'row between' }, h('div', null, h('div', { style: { fontSize: '2.4rem', fontWeight: 700, letterSpacing: '-.04em', lineHeight: 1 } }, me ? me.pos + 'º' : '—'), h('div', { class: 'small mut' }, me ? `${me.pts} pontos` : '')), h('div', { class: 'col', style: { alignItems: 'flex-end' } }, h('span', { class: 'tiny dim mono' }, 'DIFERENÇA P/ LÍDER'), h('b', { class: 'mono' }, me && lead ? `-${lead.pts - me.pts}` : '—'))),
           h('div', { class: 'row' }, ui.badge(`Etapa ${Math.min(se.round + 1, se.cal.length)}/${se.cal.length}`), me ? ui.badge(`${me.wins} vitórias`) : null, me ? ui.badge(`${me.podiums} pódios`) : null)),
-        ui.panel({ title: 'Pontos (top 8)', cls: 'grow' }, ui.hbars(top8.map(x => ({ label: x.name, value: x.pts, me: x.id === 'player' })), { max: Math.max(1, lead ? lead.pts : 1) })));
+        ui.panel({ title: 'Pontos (top 8)', cls: 'grow' }, ui.hbars(top8.map(x => ({
+          label: `${ui.driverCode(x.name)} · ${x.name.split(' ').slice(-1)[0]}`,
+          value: x.pts,
+          me: x.id === 'player',
+          color: ui.teamColor(x.teamId, se.catId)
+        })), { max: Math.max(1, lead ? lead.pts : 1) })));
       return h('div', { class: 'screen' }, ui.head(`${cat.name} ${se.year}`, `${se.cal.length} etapas · ${Object.keys(se.entries).length} pilotos`, ui.tabs([['pilotos', 'Pilotos'], ['equipes', 'Equipes'], ['cal', 'Calendário']], tab, t => { ui.seasonTab = t; ui.refresh(); })),
         h('div', { class: 'cols-3-2' }, ui.panel({ cls: 'grow' }, body), right));
     }

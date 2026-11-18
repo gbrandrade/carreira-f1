@@ -34,7 +34,7 @@
       const cb = A.ensureCapBonus(p);
       if (cb[key] == null) cb[key] = 0;
       const before = cb[key];
-      cb[key] = cl(cb[key] + amount, 0, 6);
+      cb[key] = cl(cb[key] + amount, -5, 6);
       return cb[key] - before;
     },
 

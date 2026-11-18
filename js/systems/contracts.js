@@ -627,6 +627,69 @@
     return { ok: true, msg: 'Contrato assinado!' };
   };
 
+
+  /* Renovação proativa ou assédio de equipe rival no meio da temporada (F2 e F1). */
+  Con.checkMidSeasonRenewal = function (s) {
+    const p = s.player, se = s.season;
+    if (!se || !p.contract || p.noSeat || C[se.catId].level < 7) return;
+    if (s.owner && s.owner.hasTeam(p) && p.contract.teamId === p.ownedTeam.id) return;
+
+    const curTeam = Game.systems.world.team(s, se.catId, p.teamId);
+    const ranked = Game.systems.race.ranked(se);
+    const me = ranked.find(r => r.id === 'player');
+    if (!curTeam || !me) return;
+
+    const list = [];
+    // Proposta de renovação antecipada da própria equipe se contrato está acabando e desempenho é bom
+    if (p.contract.years <= 1 && me.pos <= 10) {
+      const terms = Con.defaultTerms(s, se.catId, curTeam, p.contract.role || 'main');
+      terms.years = se.catId === 'f1' ? 2 : 1;
+      terms.salary = Math.round(terms.salary * 1.12 / 5000) * 5000;
+      list.push({
+        id: U.uid('o'), teamId: curTeam.id, catId: se.catId, teamName: curTeam.name, car: Math.round(curTeam.car),
+        terms, base: Object.assign({}, terms), tried: false, role: p.contract.role || 'main',
+        note: 'Renovação antecipada', isMidSeason: true
+      });
+    }
+
+    // Assédio de equipe rival no meio da temporada se o piloto está brilhando
+    if (me.pos <= 5 && R.chance(0.55)) {
+      const rivals = Game.systems.world.activeTeams(s, se.catId).filter(t => t.id !== curTeam.id && t.car >= curTeam.car - 2);
+      if (rivals.length) {
+        const riv = R.pick(rivals);
+        const terms = Con.defaultTerms(s, se.catId, riv, 'main');
+        terms.exit = true;
+        list.push({
+          id: U.uid('o'), teamId: riv.id, catId: se.catId, teamName: riv.name, car: Math.round(riv.car),
+          terms, base: Object.assign({}, terms), tried: false, role: 'main',
+          note: 'Assédio de rival (próximo ano)', isMidSeason: true
+        });
+      }
+    }
+
+    if (list.length) {
+      s.midSeasonOffers = list;
+      Game.systems.news.add(`MERCADO AQUECIDO: Você recebeu ${list.length} proposta(s) contratual(is) antecipada(s) para ${s.year + 1}! Confira em Contrato.`, 'good');
+    }
+  };
+
+  Con.acceptMidSeasonOffer = function (s, offer) {
+    const p = s.player;
+    if (!Con.canAfford(s, offer)) return { ok: false, msg: 'Sem fundos para a inscrição.' };
+    p.nextContract = Object.assign({
+      teamId: offer.teamId,
+      catId: offer.catId,
+      teamName: offer.teamName,
+      yearsTotal: offer.terms.years,
+      startYear: s.year + 1,
+      role: offer.role || 'main'
+    }, offer.terms);
+    s.midSeasonOffers = [];
+    Game.systems.news.both(`ACORDO FECHADO: ${p.name} assina pré-contrato com a ${offer.teamName} para ${s.year + 1}!`, 'good');
+    Game.systems.career.save();
+    return { ok: true, msg: `Pré-contrato assinado com ${offer.teamName} para ${s.year + 1}!` };
+  };
+
   Con.terminate = function (s) {
     const p = s.player, c = p.contract; if (!c) return { ok: false };
     const fee = c.exit ? 0 : Math.round(Math.abs(c.salary) * .5);
