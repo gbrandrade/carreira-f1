@@ -24,7 +24,11 @@
         : `Etapas ${sm.fromRound}ª a ${sm.toRound}ª simuladas até o próximo momento-chave da temporada.`
       ),
       !sm.callUp ? h('div', { class: 'kv3' },
-        [['Pontos somados', '+' + sm.pts], ['Vitórias', sm.wins], ['Pódios', sm.podiums]].map(([k, v]) =>
+        [
+          ['Pontos somados', '+' + sm.pts],
+          ['GPs (Vit / Pód)', `${sm.wins}V · ${sm.podiums}P`],
+          ['Sprints (Vit / Pód)', `${sm.sprintWins || 0}V · ${sm.sprintPodiums || 0}P`]
+        ].map(([k, v]) =>
           h('div', null, h('div', { class: 'k' }, k), h('div', { class: 'v' }, v))
         )
       ) : null,

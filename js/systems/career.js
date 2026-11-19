@@ -48,8 +48,8 @@
       engineerRel: 50, residence: 'BRA', devFocus: null, interviewDone: false, carBonus: 0,
       h2h: { qualiW: 0, qualiL: 0, raceW: 0, raceL: 0, mateId: null, mateName: '' },
       teamRole: 'Igualdade',
-      stats: { races: 0, wins: 0, podiums: 0, poles: 0, fl: 0, points: 0, titles: 0, dnfs: 0, seasons: 0 },
-      f1: { races: 0, wins: 0, podiums: 0, poles: 0, fl: 0, points: 0, titles: 0 }, titlesList: [], f1TeamsChamp: [], wonCircuits: [], history: [], superPoints: [], singleSeaterSeasons: 0, rival: null, ownedTeam: null,
+      stats: { races: 0, wins: 0, podiums: 0, sprintWins: 0, sprintPodiums: 0, poles: 0, fl: 0, points: 0, titles: 0, dnfs: 0, seasons: 0 },
+      f1: { races: 0, wins: 0, podiums: 0, sprintWins: 0, sprintPodiums: 0, poles: 0, fl: 0, points: 0, titles: 0 }, titlesList: [], f1TeamsChamp: [], wonCircuits: [], history: [], superPoints: [], singleSeaterSeasons: 0, rival: null, ownedTeam: null,
       lastSeason: null, season: null, ach: {}, flags: {}, academy: null, fired: false, forcedUp: false, noSeat: false, firedCount: 0
     };
     S.world.init(s);
@@ -114,7 +114,7 @@
       reserveCallUp: false,
       regConceptPending: p.catId === 'f1' && S.world.isRegYear(s.year)
     };
-    p.season = { races: 0, rounds: 0, wins: 0, podiums: 0, poles: 0, points: 0, top10: 0, champion: false };
+    p.season = { races: 0, rounds: 0, wins: 0, podiums: 0, sprintWins: 0, sprintPodiums: 0, poles: 0, points: 0, top10: 0, champion: false };
     p.devFocus = null; p.interviewDone = false; p.carBonus = 0; p.forcedUp = false; p.fired = false; p.noSeat = false;
 
     const paid = S.economy.payEntry(s);
@@ -182,21 +182,34 @@
       p.season.rounds++;
       week.results.forEach(r => {
         const o = r.order.find(x => x.id === 'player'); if (!o) return;
+        const isSprint = r.id === 'sprint';
         const add = t => {
           t.races++; t.points += o.pts;
-          if (o.dnf) { if (t.dnfs != null) t.dnfs++; }
-          else { if (o.pos === 1) t.wins++; if (o.pos <= 3) t.podiums++; }
+          if (o.dnf) {
+            if (t.dnfs != null) t.dnfs++;
+          } else if (isSprint) {
+            if (o.pos === 1) t.sprintWins = (t.sprintWins || 0) + 1;
+            if (o.pos <= 3) t.sprintPodiums = (t.sprintPodiums || 0) + 1;
+          } else {
+            if (o.pos === 1) t.wins++;
+            if (o.pos <= 3) t.podiums++;
+          }
           if (o.pole) t.poles++; if (o.fl) t.fl++;
         };
         add(p.stats);
         if (cat.id === 'f1') {
           add(p.f1);
-          if (o.pos === 1 && !o.dnf && !p.f1.firstWinAge) p.f1.firstWinAge = s.year - p.birth;
+          if (!isSprint && o.pos === 1 && !o.dnf && !p.f1.firstWinAge) p.f1.firstWinAge = s.year - p.birth;
         }
         p.season.races++; p.season.points += o.pts;
         if (!o.dnf) {
-          if (o.pos === 1) { p.season.wins++; if (cat.id === 'f1') { if (!p.wonCircuits) p.wonCircuits = []; if (!p.wonCircuits.includes(cal.circuit.id)) p.wonCircuits.push(cal.circuit.id); } }
-          if (o.pos <= 3) p.season.podiums++;
+          if (isSprint) {
+            if (o.pos === 1) p.season.sprintWins = (p.season.sprintWins || 0) + 1;
+            if (o.pos <= 3) p.season.sprintPodiums = (p.season.sprintPodiums || 0) + 1;
+          } else {
+            if (o.pos === 1) { p.season.wins++; if (cat.id === 'f1') { if (!p.wonCircuits) p.wonCircuits = []; if (!p.wonCircuits.includes(cal.circuit.id)) p.wonCircuits.push(cal.circuit.id); } }
+            if (o.pos <= 3) p.season.podiums++;
+          }
           if (o.pos <= 10) p.season.top10++;
         }
         if (o.pole) p.season.poles++;
@@ -319,7 +332,7 @@
     if (se.round >= se.cal.length - 1 && !isRes) return null;
 
     const fromRound = se.round + 1;
-    const startPts = p.season.points, startWins = p.season.wins, startPod = p.season.podiums;
+    const startPts = p.season.points, startWins = p.season.wins, startPod = p.season.podiums, startSpWins = p.season.sprintWins || 0, startSpPod = p.season.sprintPodiums || 0;
     let count = 0;
 
     while (!se.finished) {
@@ -355,6 +368,8 @@
       pts: p.season.points - startPts,
       wins: p.season.wins - startWins,
       podiums: p.season.podiums - startPod,
+      sprintWins: (p.season.sprintWins || 0) - startSpWins,
+      sprintPodiums: (p.season.sprintPodiums || 0) - startSpPod,
       pos: me ? me.pos : '-',
       gap,
       isMid,

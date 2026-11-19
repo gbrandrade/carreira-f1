@@ -459,23 +459,42 @@
 
   Race.applyResults = function (season, week) {
     const S = season.standings;
-    week.results.forEach(r => r.order.forEach(o => {
-      const s = S.drivers[o.id] || (S.drivers[o.id] = { pts: 0, wins: 0, podiums: 0, poles: 0, fl: 0, racePts: [], races: 0, dnfs: 0 });
-      s.pts += o.pts; s.racePts.push(o.pts); s.races++;
-      if (o.dnf) s.dnfs++; else { if (o.pos === 1) s.wins++; if (o.pos <= 3) s.podiums++; }
-      if (o.pole) s.poles++; if (o.fl) s.fl++;
-      S.teams[o.teamId] = (S.teams[o.teamId] || 0) + o.pts;
-    }));
+    week.results.forEach(r => {
+      const isSprint = r.id === 'sprint';
+      r.order.forEach(o => {
+        const s = S.drivers[o.id] || (S.drivers[o.id] = { pts: 0, wins: 0, podiums: 0, sprintWins: 0, sprintPodiums: 0, poles: 0, fl: 0, racePts: [], races: 0, dnfs: 0 });
+        s.pts += o.pts; s.racePts.push(o.pts); s.races++;
+        if (o.dnf) {
+          s.dnfs++;
+        } else if (isSprint) {
+          if (o.pos === 1) s.sprintWins = (s.sprintWins || 0) + 1;
+          if (o.pos <= 3) s.sprintPodiums = (s.sprintPodiums || 0) + 1;
+        } else {
+          if (o.pos === 1) s.wins++;
+          if (o.pos <= 3) s.podiums++;
+        }
+        if (o.pole) s.poles++; if (o.fl) s.fl++;
+        S.teams[o.teamId] = (S.teams[o.teamId] || 0) + o.pts;
+      });
+    });
   };
 
   Race.ranked = function (season, final) {
     const cat = C[season.catId];
     return Object.keys(season.entries).map(id => {
-      const s = season.standings.drivers[id] || { pts: 0, wins: 0, podiums: 0, poles: 0, fl: 0, racePts: [], races: 0 };
+      const s = season.standings.drivers[id] || { pts: 0, wins: 0, podiums: 0, sprintWins: 0, sprintPodiums: 0, poles: 0, fl: 0, racePts: [], races: 0 };
       let pts = s.pts;
       if (final && cat.discard && s.racePts.length > cat.discard) pts -= s.racePts.slice().sort((a, b) => a - b).slice(0, cat.discard).reduce((x, y) => x + y, 0);
-      return Object.assign({ id, pts, raw: s.pts }, season.entries[id], { wins: s.wins, podiums: s.podiums, poles: s.poles, fl: s.fl, races: s.races });
-    }).sort((a, b) => b.pts - a.pts || b.wins - a.wins || b.podiums - a.podiums || b.fl - a.fl)
+      return Object.assign({ id, pts, raw: s.pts }, season.entries[id], {
+        wins: s.wins,
+        podiums: s.podiums,
+        sprintWins: s.sprintWins || 0,
+        sprintPodiums: s.sprintPodiums || 0,
+        poles: s.poles,
+        fl: s.fl,
+        races: s.races
+      });
+    }).sort((a, b) => b.pts - a.pts || b.wins - a.wins || b.podiums - a.podiums || (b.sprintWins || 0) - (a.sprintWins || 0) || b.fl - a.fl)
       .map((r, i) => Object.assign(r, { pos: i + 1 }));
   };
 })();

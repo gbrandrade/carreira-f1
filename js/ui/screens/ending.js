@@ -19,7 +19,7 @@
       g.fillStyle = tx; g.font = '700 22px sans-serif'; g.fillText(String(Math.round(val)), 410, y + 2);
     });
     g.fillStyle = tx; g.font = '700 92px sans-serif'; g.fillText(String(A.playerCapGer(p)), 56, 500); g.fillStyle = t3; g.font = '600 14px monospace'; g.fillText('GER MÁXIMO', 190, 500);
-    const f = p.f1, rows = [['Títulos de F1', f.titles], ['Vitórias na F1', f.wins], ['Pódios na F1', f.podiums], ['Poles na F1', f.poles], ['Corridas (total)', p.stats.races], ['Títulos (total)', p.stats.titles]];
+    const f = p.f1, rows = [['Títulos de F1', f.titles], ['GPs F1 (Vit / Pód)', `${f.wins}V · ${f.podiums}P`], ['Sprints F1 (Vit / Pód)', `${f.sprintWins || 0}V · ${f.sprintPodiums || 0}P`], ['Poles na F1', f.poles], ['Corridas (total)', p.stats.races], ['Títulos (total)', p.stats.titles]];
     rows.forEach(([k, val], i) => { const y = 230 + i * 48; g.fillStyle = t2; g.font = '20px sans-serif'; g.fillText(k, 560, y); g.fillStyle = tx; g.font = '700 30px sans-serif'; g.textAlign = 'right'; g.fillText(String(val), 930, y + 2); g.textAlign = 'left'; g.fillStyle = s3; g.fillRect(560, y + 14, 370, 1); });
     return cv;
   }
@@ -28,7 +28,7 @@
     render() {
       const s = Game.state, p = s.player, e = s.ending || { title: 'Carreira', text: '' }, cv = cardCanvas(s);
       cv.style.cssText = 'max-width:100%;max-height:100%;border-radius:.8rem;border:1px solid var(--line-strong)';
-      const items = [['Anos de carreira', s.year - Game.config.startYear], ['Títulos de F1', p.f1.titles], ['Vitórias na F1', p.f1.wins], ['Pódios na F1', p.f1.podiums], ['Total de corridas', p.stats.races], ['Total de títulos', p.stats.titles], ['Patrimônio final', Game.utils.fmtMoney(p.money)], ['Conquistas', Object.keys(p.ach).length + '/' + S.records.achievements.length]];
+      const items = [['Anos de carreira', s.year - Game.config.startYear], ['Títulos de F1', p.f1.titles], ['GPs F1 (Vit / Pód)', `${p.f1.wins}V · ${p.f1.podiums}P`], ['Sprints F1 (Vit / Pód)', `${p.f1.sprintWins || 0}V · ${p.f1.sprintPodiums || 0}P`], ['Total de corridas', p.stats.races], ['Total de títulos', p.stats.titles], ['Patrimônio final', Game.utils.fmtMoney(p.money)], ['Conquistas', Object.keys(p.ach).length + '/' + S.records.achievements.length]];
       return h('div', { class: 'creation' }, h('div', null, ui.badge('FIM DE CARREIRA', 'acc'), h('div', { class: 'endh', style: { marginTop: '.5rem' } }, e.title), h('div', { class: 'mut', style: { marginTop: '.4rem' } }, e.text)),
         h('div', { class: 'cols-2-3' }, ui.panel({ title: 'Resumo', cls: 'marks' }, items.map(([a, b]) => h('div', { class: 'row between', style: { borderBottom: '1px solid var(--line)', padding: '.3rem 0' } }, h('span', { class: 'mut' }, a), h('b', { class: 'mono' }, b)))), ui.panel({ cls: 'center' }, cv)),
         h('div', { class: 'row between' }, h('div', { class: 'row' }, ui.btn('Baixar cartão (PNG)', () => { const a = document.createElement('a'); a.href = cv.toDataURL('image/png'); a.download = `${p.name.replace(/\s+/g, '-')}-carreira.png`; a.click(); }, '', false, 'download'), ui.btn('Ver linha do tempo', () => ui.go('career'), 'ghost', false, 'clock')),

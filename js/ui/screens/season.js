@@ -10,9 +10,21 @@
       const nm = x => h('span', { class: 'row gap-s' }, ui.dcode(x.name), h('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis' } }, x.name));
       let body;
       if (tab === 'pilotos') {
-        const top = r.slice(0, 12), rows = top.map(x => ({ me: x.id === 'player', cells: [ui.posCell(x.pos), nm(x), ui.teamChip(x.teamName, x.teamId, se.catId), h('b', null, x.pts), x.wins, x.podiums] }));
-        if (me && me.pos > 12) rows.push({ me: true, cells: [ui.posCell(me.pos), nm(me), ui.teamChip(me.teamName, me.teamId, se.catId), h('b', null, me.pts), me.wins, me.podiums] });
-        body = ui.table([{ h: '#', w: '2.4rem' }, { h: 'Piloto' }, { h: 'Equipe' }, { h: 'Pts', cls: 'n', w: '3.2rem' }, { h: 'V', cls: 'n', w: '2.2rem' }, { h: 'P', cls: 'n', w: '2.2rem' }], rows);
+        const hasSprints = se.cal.some(c => c.sprint) || cat.races.some(rc => rc.id === 'sprint');
+        const vpCell = x => h('span', { class: 'mono tiny' }, `${x.wins}V · ${x.podiums}P`);
+        const sprCell = x => h('span', { class: 'mono tiny dim' }, `${x.sprintWins || 0}V · ${x.sprintPodiums || 0}P`);
+        const makePilotRow = x => ({
+          me: x.id === 'player',
+          cells: hasSprints
+            ? [ui.posCell(x.pos), nm(x), ui.teamChip(x.teamName, x.teamId, se.catId), h('b', null, x.pts), vpCell(x), sprCell(x)]
+            : [ui.posCell(x.pos), nm(x), ui.teamChip(x.teamName, x.teamId, se.catId), h('b', null, x.pts), vpCell(x)]
+        });
+        const top = r.slice(0, 12), rows = top.map(makePilotRow);
+        if (me && me.pos > 12) rows.push(makePilotRow(me));
+        const cols = hasSprints
+          ? [{ h: '#', w: '2.3rem' }, { h: 'Piloto' }, { h: 'Equipe' }, { h: 'Pts', cls: 'n', w: '3.0rem' }, { h: 'GPs (V/P)', cls: 'n', w: '4.6rem' }, { h: 'Spr (V/P)', cls: 'n', w: '4.6rem' }]
+          : [{ h: '#', w: '2.4rem' }, { h: 'Piloto' }, { h: 'Equipe' }, { h: 'Pts', cls: 'n', w: '3.2rem' }, { h: 'Vit / Pód', cls: 'n', w: '4.8rem' }];
+        body = ui.table(cols, rows);
       } else if (tab === 'equipes') {
         const teams = Object.keys(se.standings.teams).map(id => ({ id, pts: se.standings.teams[id], name: (S.world.team(s, se.catId, id) || {}).name || id })).sort((a, b) => b.pts - a.pts);
         body = ui.table([{ h: '#', w: '2.4rem' }, { h: 'Equipe' }, { h: 'Pts', cls: 'n', w: '3.5rem' }], teams.slice(0, 13).map((t, i) => ({ me: t.id === s.player.teamId, cells: [ui.posCell(i + 1), ui.teamChip(t.name, t.id, se.catId), h('b', null, t.pts)] })));
@@ -21,7 +33,13 @@
       const lead = r[0], top8 = r.slice(0, 8);
       const right = h('div', { class: 'col', style: { gap: '.7rem' } },
         ui.panel({ title: 'Você no campeonato', cls: 'marks' }, h('div', { class: 'row between' }, h('div', null, h('div', { style: { fontSize: '2.4rem', fontWeight: 700, letterSpacing: '-.04em', lineHeight: 1 } }, me ? me.pos + 'º' : '—'), h('div', { class: 'small mut' }, me ? `${me.pts} pontos` : '')), h('div', { class: 'col', style: { alignItems: 'flex-end' } }, h('span', { class: 'tiny dim mono' }, 'DIFERENÇA P/ LÍDER'), h('b', { class: 'mono' }, me && lead ? `-${lead.pts - me.pts}` : '—'))),
-          h('div', { class: 'row' }, ui.badge(`Etapa ${Math.min(se.round + 1, se.cal.length)}/${se.cal.length}`), me ? ui.badge(`${me.wins} vitórias`) : null, me ? ui.badge(`${me.podiums} pódios`) : null)),
+          h('div', { class: 'row', style: { flexWrap: 'wrap' } },
+            ui.badge(`Etapa ${Math.min(se.round + 1, se.cal.length)}/${se.cal.length}`),
+            me ? ui.badge(`GPs: ${me.wins}V · ${me.podiums}P`, 'ok') : null,
+            (me && ((me.sprintWins || 0) > 0 || (me.sprintPodiums || 0) > 0 || se.cal.some(c => c.sprint)))
+              ? ui.badge(`Sprints: ${me.sprintWins || 0}V · ${me.sprintPodiums || 0}P`, 'acc')
+              : null
+          )),
         ui.panel({ title: 'Pontos (top 8)', cls: 'grow' }, ui.hbars(top8.map(x => ({
           label: `${ui.driverCode(x.name)} · ${x.name.split(' ').slice(-1)[0]}`,
           value: x.pts,
