@@ -25,17 +25,17 @@
   /* Normaliza estrutura da Academia (compatível com saves antigos onde era string). */
   Con.ensureAcademy = function (p) {
     if (!p || !p.academy) return null;
-    // Ao chegar na F1, o piloto se forma da academia júnior (não faz mais sentido ter programa de base)
     if (p.catId === 'f1') {
       p.academy = null;
       return null;
     }
     if (typeof p.academy === 'string') {
-      const meta = (D.academies || []).find(a => a.name === p.academy) || { id: 'acad', name: p.academy, f1Teams: ['rbs', 'haa'], color: '#f03a3a' };
+      const meta = (D.academies || []).find(a => a.name === p.academy) || { id: 'acad', name: p.academy, f1Teams: ['rbs', 'haa'], partnerTeams: {}, color: '#f03a3a' };
       p.academy = {
         id: meta.id,
         name: meta.name,
         f1Teams: meta.f1Teams || [],
+        partnerTeams: meta.partnerTeams || {},
         color: meta.color || '#f03a3a',
         active: true,
         years: 2,
@@ -48,8 +48,26 @@
         mediaDone: 0,
         satisfaction: 70
       };
+    } else if (!p.academy.partnerTeams) {
+      const meta = (D.academies || []).find(a => a.id === p.academy.id || a.name === p.academy.name);
+      p.academy.partnerTeams = (meta && meta.partnerTeams) || {};
     }
     return p.academy.active ? p.academy : null;
+  };
+
+  /* Retorna as equipes parceiras da Academia na categoria informada (no Kart não há restrição de parceiras). */
+  Con.academyPartnersFor = function (acad, catId) {
+    if (!acad) return null;
+    if (catId && catId.startsWith('kart')) return null; // Kart é livre
+    const pt = acad.partnerTeams || {};
+    if (catId === 'f1') return acad.f1Teams || pt.f1 || [];
+    return pt[catId] || null;
+  };
+
+  Con.isAcademyPartnerTeam = function (acad, catId, teamId) {
+    const list = Con.academyPartnersFor(acad, catId);
+    if (!list) return true;
+    return list.includes(teamId);
   };
 
   /* Avalia se o piloto teve uma campanha extraordinária capaz de pular categorias (ex.: F3 -> F1, F4 -> F3). */
@@ -192,12 +210,15 @@
 
     cats.forEach(catId => {
       const c = C[catId], diff = c.level - cur.level;
-      let teams = Game.systems.world.activeTeams(s, catId);
+      let allTeams = Game.systems.world.activeTeams(s, catId);
+      const partnerIds = acad ? Con.academyPartnersFor(acad, catId) : null;
 
-      if (catId === 'f1') {
+      // Se pertence a uma academia, apenas equipes parceiras da academia naquela categoria são válidas oficialmente
+      let teams = partnerIds ? allTeams.filter(t => partnerIds.includes(t.id)) : allTeams.slice();
+      if (!teams.length) teams = allTeams.slice();
+
+      if (catId === 'f1' && !partnerIds) {
         teams = teams.filter(t => {
-          const isAcadTeam = acad && (acad.f1Teams || []).includes(t.id);
-          if (isAcadTeam) return true;
           if (t.prestige >= 0.85) return rep >= 72 && Con.ger(s) >= 84;
           if (t.prestige >= 0.55) return rep >= 56 || sponsorPower >= 4000000;
           return true;
@@ -206,8 +227,8 @@
 
       const target = cl((attract - 10 * Math.max(0, diff)) / 100, .05, 1);
       let sorted = R.shuffle(teams).map(t => {
-        const isAcadTeam = (catId === 'f1' && acad && (acad.f1Teams || []).includes(t.id)) ? 0.5 : 0;
-        return { t, w: Math.exp(-Math.pow(t.prestige - target, 2) / (2 * .22 * .22)) + isAcadTeam };
+        const isPartner = (partnerIds && partnerIds.includes(t.id)) ? 0.6 : 0;
+        return { t, w: Math.exp(-Math.pow(t.prestige - target, 2) / (2 * .22 * .22)) + isPartner };
       }).sort((a, b) => b.w - a.w + R.normal(0, .12));
 
       const pick = sorted.slice(0, catId === cur.id ? 3 : 2);
@@ -216,11 +237,11 @@
         if (catId === 'f1' && cur.id === 'f1' && attract < 18 && R.chance(.6)) return;
         const terms = Con.defaultTerms(s, catId, x.t, 'main');
         const isSkip = diff >= 2;
-        const isAcadTeam = catId === 'f1' && acad && (acad.f1Teams || []).includes(x.t.id);
+        const isPartner = partnerIds && partnerIds.includes(x.t.id);
         let note = null;
         if (isSkip && catId === 'f1') note = `Salto direto (${cur.short} → F1)`;
         else if (isSkip) note = `Promoção acelerada (${cur.short} → ${c.short})`;
-        else if (isAcadTeam) note = `Via ${acad.name}`;
+        else if (isPartner) note = `Parceira ${acad.name}`;
 
         offers.push({
           id: U.uid('o'),
@@ -235,6 +256,32 @@
           note
         });
       });
+
+      // Sondagens secretas "por fora" de equipes NÃO parceiras quando o piloto tem vínculo com Academia
+      if (acad && partnerIds && c.level >= 3) {
+        const nonPartners = allTeams.filter(t => !partnerIds.includes(t.id) && (catId !== 'f1' || t.prestige < 0.85 || rep >= 70));
+        if (nonPartners.length && R.chance(0.75)) {
+          const poacher = R.pick(nonPartners);
+          const terms = Con.defaultTerms(s, catId, poacher, 'main');
+          if (terms.salary < 0) terms.salary = Math.round(terms.salary * 0.7 / 5000) * 5000;
+          else terms.salary = Math.round(terms.salary * 1.25 / 5000) * 5000;
+          const breachFine = Math.round((150000 + c.level * 120000 + (acad.stipend || 0) * 2) / 10000) * 10000;
+          offers.push({
+            id: U.uid('o'),
+            teamId: poacher.id,
+            catId,
+            teamName: poacher.name,
+            car: Math.round(poacher.car),
+            terms,
+            base: Object.assign({}, terms),
+            tried: false,
+            role: 'main',
+            isPoach: true,
+            breachFine,
+            note: 'Sondagem por fora (quebra de academia)'
+          });
+        }
+      }
     });
 
     if (slEligible && (cur.id === 'f2' || cur.id === 'f3' || cur.id === 'f1')) {
@@ -245,7 +292,8 @@
         const terms = Con.defaultTerms(s, 'f1', t, 'reserve');
         offers.push({
           id: U.uid('o'), teamId: t.id, catId: 'f1', teamName: t.name, car: Math.round(t.car),
-          terms, base: Object.assign({}, terms), tried: false, role: 'reserve', note: 'Piloto Reserva F1'
+          terms, base: Object.assign({}, terms), tried: false, role: 'reserve',
+          note: acad ? `Reserva Parceira (${acad.name})` : 'Piloto Reserva F1'
         });
       });
     }
@@ -345,6 +393,7 @@
       acadId: meta.id,
       name: meta.name,
       f1Teams: meta.f1Teams || [],
+      partnerTeams: meta.partnerTeams || {},
       color: meta.color || '#f03a3a',
       tier,
       terms,
@@ -385,13 +434,17 @@
     const pool = (D.academies || []).filter(a => (!acad || a.id !== acad.id) && !s.academyOffers.some(o => o.acadId === a.id));
     if (!pool.length) return;
 
-    const count = forceAdd ? 1 : (tr.titles >= 1 || tr.wins >= 4 ? 2 : 1);
+    const count = forceAdd
+      ? (tr.titles >= 1 || tr.wins >= 3 ? 2 : 1)
+      : (tr.titles >= 1 || tr.wins >= 4 ? R.int(3, 4) : tr.podiums >= 3 ? R.int(2, 3) : 1);
     const picked = R.shuffle(pool).slice(0, count);
 
     if (forceAdd) {
-      const off = Con.buildAcademyOffer(s, picked[0]);
-      s.academyOffers.push(off);
-      Game.systems.news.add(`ACADEMIA: A ${off.name} enviou um convite oficial após seus resultados na pista!`, 'good');
+      picked.forEach(m => {
+        const off = Con.buildAcademyOffer(s, m);
+        s.academyOffers.push(off);
+        Game.systems.news.add(`ACADEMIA: A ${off.name} enviou proposta oficial para seu programa!`, 'good');
+      });
     } else {
       s.academyOffers = picked.map(m => Con.buildAcademyOffer(s, m));
     }
@@ -429,12 +482,15 @@
     const chance = cl(0.28 + tr.score * 0.012 + (rep - 45) * 0.006 + agBonus, 0.20, 0.92);
 
     if (R.chance(chance)) {
-      const meta = R.pick(pool);
-      const off = Con.buildAcademyOffer(s, meta);
-      s.academyOffers.push(off);
-      Game.systems.news.add(`Prospecção: A ${off.name} analisou seu histórico e enviou uma proposta!`, 'good');
+      const numFound = (tr.titles >= 1 || tr.wins >= 4) && pool.length >= 2 ? 2 : 1;
+      const chosen = R.shuffle(pool).slice(0, numFound);
+      chosen.forEach(meta => {
+        const off = Con.buildAcademyOffer(s, meta);
+        s.academyOffers.push(off);
+        Game.systems.news.add(`Prospecção: A ${off.name} analisou seu histórico e enviou uma proposta!`, 'good');
+      });
       Game.systems.career.save();
-      return { ok: true, msg: `${off.name} respondeu ao contato e enviou uma proposta!` };
+      return { ok: true, msg: numFound > 1 ? `${chosen.map(x => x.name).join(' e ')} enviaram propostas!` : `${chosen[0].name} respondeu ao contato e enviou uma proposta!` };
     }
     Game.systems.career.save();
     return { ok: false, msg: 'As academias pediram mais pódios ou títulos no currículo antes de abrir vaga.' };
@@ -482,6 +538,7 @@
       id: offer.acadId,
       name: offer.name,
       f1Teams: offer.f1Teams || [],
+      partnerTeams: offer.partnerTeams || {},
       color: offer.color || '#f03a3a',
       active: true,
       years: t.years,
@@ -602,6 +659,16 @@
   };
 
   Con.negotiate = function (s, offer, nt) {
+    const p = s.player;
+    const acad = Con.ensureAcademy(p);
+    // Se negociar por fora com equipe não parceira, há risco de vazamento e retaliação pesada da Academia!
+    if (offer.isPoach && acad && R.chance(0.55)) {
+      const leakFine = Math.round((offer.breachFine || 200000) * 0.45);
+      p.money -= leakFine;
+      p.reputation = cl((p.reputation || 45) - 10, 0, 100);
+      Con.adjustAcademySat(s, -35, 'negociação clandestina com equipe rival sem autorização');
+      Game.systems.news.both(`ESCÂNDALO CONTRATUAL: Vazou sua reunião secreta com a ${offer.teamName}! Multa de ${U.fmtMoney(leakFine)} e crise grave com a ${acad.name}.`, 'bad');
+    }
     const prob = Con.chance(s, offer, nt);
     offer.tried = true;
     if (R.chance(prob)) { offer.terms = nt; return { ok: true, msg: 'A equipe aceitou os termos.' }; }
@@ -612,7 +679,24 @@
 
   Con.accept = function (s, offer) {
     const p = s.player;
-    if (!Con.canAfford(s, offer)) return { ok: false, msg: 'Sem fundos para a inscrição.' };
+    const acad = Con.ensureAcademy(p);
+    const isBreach = !!(acad && (offer.isPoach || !Con.isAcademyPartnerTeam(acad, offer.catId, offer.teamId)));
+    const fine = isBreach ? (offer.breachFine || Math.round((150000 + C[offer.catId].level * 120000) / 10000) * 10000) : 0;
+
+    const totalNeeded = fine + (offer.terms.salary < 0 ? (isBreach ? -offer.terms.salary : Con.effectiveCost(s, offer.terms.salary)) : 0);
+    if (p.money + Game.systems.economy.nextSupport(s) < totalNeeded) {
+      return { ok: false, msg: isBreach ? `Sem fundos para pagar a multa judicial da academia (${U.fmtMoney(fine)}) + inscrição.` : 'Sem fundos para a inscrição.' };
+    }
+
+    if (isBreach) {
+      const oldAcadName = acad.name;
+      p.money -= fine;
+      p.academy = null;
+      p.reputation = cl((p.reputation || 45) - 14, 0, 100);
+      p.popularity = cl((p.popularity || 10) - 6, 0, 100);
+      Game.systems.news.both(`PROCESSO E MULTA PESADA: Ao assinar por fora com a ${offer.teamName}, você rompeu o contrato da ${oldAcadName}! Multa de ${U.fmtMoney(fine)} aplicada e -14 Reputação.`, 'bad');
+    }
+
     p.contract = Object.assign({
       teamId: offer.teamId,
       catId: offer.catId,
@@ -623,8 +707,8 @@
     }, offer.terms);
     s.offers = [];
     const roleTxt = offer.role === 'reserve' ? ' como Piloto Reserva' : '';
-    Game.systems.news.add(`Contrato assinado com a ${offer.teamName} (${C[offer.catId].short})${roleTxt}.`, 'good');
-    return { ok: true, msg: 'Contrato assinado!' };
+    Game.systems.news.add(`Contrato assinado com a ${offer.teamName} (${C[offer.catId].short})${roleTxt}.`, isBreach ? 'warn' : 'good');
+    return { ok: true, msg: isBreach ? `Assinado com ${offer.teamName} (multa de quebra de ${U.fmtMoney(fine)} paga)!` : 'Contrato assinado!' };
   };
 
 

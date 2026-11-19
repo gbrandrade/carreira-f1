@@ -123,16 +123,33 @@
   }
 
   function offerCard(o, s) {
-    const t = o.terms, afford = S.contracts.canAfford(s, o), cat = C[o.catId];
-    const effCost = S.contracts.effectiveCost(s, t.salary);
+    const t = o.terms, cat = C[o.catId];
     const acad = S.contracts.ensureAcademy(s.player);
-    const hasAcadDiscount = t.salary < 0 && acad && acad.coverage > 0 && effCost < Math.abs(t.salary);
+    const isPoach = !!o.isPoach;
+    const fine = isPoach ? (o.breachFine || 0) : 0;
+    const effCost = isPoach ? (t.salary < 0 ? -t.salary : 0) : S.contracts.effectiveCost(s, t.salary);
+    const afford = (s.player.money + S.economy.nextSupport(s)) >= (fine + effCost);
+    const hasAcadDiscount = !isPoach && t.salary < 0 && acad && acad.coverage > 0 && effCost < Math.abs(t.salary);
 
-    return h('div', { class: 'offer ' + (afford ? '' : 'dis') },
+    const onAccept = () => {
+      if (isPoach && acad) {
+        ui.confirm(
+          'Quebra de contrato com Academia!',
+          `A ${o.teamName} não é parceira da ${acad.name}. Assinar por fora acarreta processo, multa judicial de ${M(fine)}, perda imediata da bolsa e -14 de Reputação. Deseja prosseguir?`,
+          () => { const r = S.contracts.accept(s, o); ui.toast(r.msg, r.ok ? 'warn' : 'bad'); ui.refresh(); }
+        );
+        return;
+      }
+      const r = S.contracts.accept(s, o);
+      ui.toast(r.msg, r.ok ? 'good' : 'bad');
+      ui.refresh();
+    };
+
+    return h('div', { class: 'offer ' + (afford ? '' : 'dis'), style: isPoach ? { borderColor: 'color-mix(in srgb, var(--bad) 50%, transparent)' } : null },
       h('div', { class: 'row between' },
         ui.teamChip(o.teamName, o.teamId, o.catId),
         h('span', { class: 'row' },
-          o.note ? ui.badge(o.note, o.note.includes('Salto') || o.note.includes('acelerada') ? 'acc' : '') : null,
+          o.note ? ui.badge(o.note, isPoach ? 'bad' : (o.note.includes('Salto') || o.note.includes('acelerada') || o.note.includes('Parceira')) ? 'acc' : '') : null,
           ui.badge(cat.short, 'info')
         )
       ),
@@ -140,10 +157,10 @@
       h('div', { class: 'kv3' }, [
         ['Duração', t.years + ' ano(s)'],
         [salLabel(t), hasAcadDiscount ? `${M(effCost)} (c/ bolsa)` : M(Math.abs(t.salary))],
-        ['Bônus título', M(t.bTitle)]
-      ].map(([k, v]) => h('div', null, h('div', { class: 'k' }, k), h('div', { class: 'v', style: { color: k !== 'Duração' && t.salary < 0 && k !== 'Bônus título' ? 'var(--warn)' : '' } }, v)))),
+        [isPoach ? 'Multa quebra' : 'Bônus título', isPoach ? M(fine) : M(t.bTitle)]
+      ].map(([k, v]) => h('div', null, h('div', { class: 'k' }, k), h('div', { class: 'v', style: { color: (k === 'Multa quebra' || (k !== 'Duração' && t.salary < 0 && k !== 'Bônus título')) ? 'var(--warn)' : '' } }, v)))),
       h('div', { class: 'row' },
-        ui.btn('Aceitar', () => { const r = S.contracts.accept(s, o); ui.toast(r.msg); ui.refresh(); }, 'primary sm', !afford, 'check'),
+        ui.btn(isPoach ? 'Assinar (c/ multa)' : 'Aceitar', onAccept, 'primary sm', !afford, 'check'),
         ui.btn(o.tried ? 'Já negociada' : 'Negociar', () => negotiate(o), 'sm', o.tried || !afford, 'swap'),
         !afford ? h('span', { class: 'tiny bad' }, 'sem fundos') : null,
         t.exit ? ui.badge('cláusula de saída') : null
@@ -168,6 +185,7 @@
     }
 
     if (acad) {
+      const f1Names = (acad.f1Teams || []).map(id => (Game.data.teams.f1.find(x => x.id === id) || {}).name || id).map(n => n.split(' ')[0]).join(', ');
       return h('div', { class: 'col', style: { borderTop: '1px solid var(--line)', paddingTop: '.55rem', gap: '.4rem' } },
         h('div', { class: 'row between' },
           h('span', { class: 'pt' }, 'Academia de pilotos'),
@@ -181,7 +199,7 @@
           h('span', { class: 'tiny mono mut' }, `Cobre ${Math.round(acad.coverage * 100)}% · ${M(acad.stipend)}/ano`)
         ),
         ui.bar('Confiança', acad.satisfaction),
-        h('div', { class: 'tiny mut' }, `Testes F1 (TPC): ${acad.f1TestsLeft}/${acad.f1TestsPerYear} · Mídia: ${acad.mediaDone}/${acad.mediaObligations} · Punições e maus resultados causam demissão.`)
+        h('div', { class: 'tiny mut' }, `Vaga F1 vinculada: ${f1Names} · Apenas equipes parceiras são permitidas sem multa contratual.`)
       );
     }
 
@@ -192,23 +210,29 @@
     }, 'sm', false, 'users');
 
     if (aOffers.length) {
-      const off = aOffers[0];
-      const t = off.terms;
-      return h('div', { class: 'col', style: { borderTop: '1px solid var(--line)', paddingTop: '.55rem', gap: '.4rem' } },
+      return h('div', { class: 'col', style: { borderTop: '1px solid var(--line)', paddingTop: '.55rem', gap: '.45rem' } },
         h('div', { class: 'row between' },
-          h('span', { class: 'pt' }, `Convite de Academia (${aOffers.length})`),
-          ui.badge('NOVA PROPOSTA', 'acc')
+          h('span', { class: 'pt' }, `Convites de Academia (${aOffers.length})`),
+          aOffers.length < 3 ? seekBtn : ui.badge('ESCOLHA 1 PROGRAMA', 'acc')
         ),
-        h('div', { class: 'tchip' },
-          h('i', { class: 'tbar', style: { background: off.color || 'var(--accent)' } }),
-          h('b', { class: 'small' }, off.name)
-        ),
-        h('div', { class: 'tiny mut' }, `${t.years} anos · cobre ${Math.round(t.coverage * 100)}% da inscrição + ${M(t.stipend)}/ano + ${t.f1TestsPerYear} teste(s) F1/ano`),
-        h('div', { class: 'row', style: { flexWrap: 'wrap' } },
-          ui.btn('Assinar programa', () => { const r = S.contracts.acceptAcademy(s, off); ui.toast(r.msg); ui.refresh(); }, 'primary sm', false, 'check'),
-          ui.btn(off.tried ? 'Negociado' : 'Negociar', () => negotiateAcademyModal(off), 'sm', off.tried, 'swap'),
-          aOffers.length < 3 ? seekBtn : null
-        )
+        aOffers.map(off => {
+          const t = off.terms;
+          const f1Linked = (off.f1Teams || []).map(id => (Game.data.teams.f1.find(x => x.id === id) || {}).name || id).map(n => n.split(' ')[0]).join('/');
+          return h('div', { class: 'col', style: { padding: '.42rem .55rem', borderRadius: '.5rem', background: 'var(--surface-2)', border: '1px solid var(--line)', gap: '.25rem' } },
+            h('div', { class: 'row between' },
+              h('span', { class: 'tchip' },
+                h('i', { class: 'tbar', style: { background: off.color || 'var(--accent)' } }),
+                h('b', { class: 'small' }, off.name)
+              ),
+              ui.badge(`F1: ${f1Linked}`, 'info')
+            ),
+            h('div', { class: 'tiny mut' }, `${t.years} anos · cobre ${Math.round(t.coverage * 100)}% + ${M(t.stipend)}/ano + ${t.f1TestsPerYear} teste(s) F1/ano`),
+            h('div', { class: 'row' },
+              ui.btn('Assinar', () => { const r = S.contracts.acceptAcademy(s, off); ui.toast(r.msg, 'good'); ui.refresh(); }, 'primary sm', false, 'check'),
+              ui.btn(off.tried ? 'Negociado' : 'Negociar', () => negotiateAcademyModal(off), 'sm', off.tried, 'swap')
+            )
+          );
+        })
       );
     }
 

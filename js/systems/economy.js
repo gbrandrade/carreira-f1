@@ -45,10 +45,15 @@
 
   E.lifestyleCost = s => {
     const p = s.player;
-    if (!p || (p.catId !== 'f1' && !(s.flags && s.flags.wasF1))) return 0;
+    if (!p) return 0;
+    const lv = C[p.catId] ? C[p.catId].level : 0;
+    if (lv < 3) return 0;
+    if (lv < 8 && !(s.flags && s.flags.wasF1)) {
+      return Math.round((15000 + lv * 18000) / 1000) * 1000;
+    }
     const titles = (p.f1 && p.f1.titles) || 0;
     const pop = p.popularity || 10;
-    return Math.round((350000 + pop * 12000 + titles * 450000) / 10000) * 10000;
+    return Math.round((1400000 + pop * 38000 + titles * 1600000) / 10000) * 10000;
   };
   E.upkeep = s => U.sum(s.player.assets.map(a => { const d = E.def(a.id); return d ? d.upkeep * (d.staff ? 1 : 1 + .3 * (a.lv - 1)) : 0; })) + E.lifestyleCost(s);
 
@@ -65,6 +70,34 @@
     if (!i) return { ok: false, msg: '' };
     p.money += i.amount; p.invest.splice(p.invest.indexOf(i), 1);
     return { ok: true, msg: 'Valor resgatado.' };
+  };
+
+
+  /* Retorna os patrocinadores oficiais da equipe atual e a cota comercial anual do piloto. */
+  E.teamSponsorInfo = function (s) {
+    const p = s.player;
+    const catId = p.catId || 'kartReg';
+    const lv = C[catId] ? C[catId].level : 0;
+    const teamId = p.teamId;
+    const tsMap = D.teamSponsors || {};
+    const entry = (teamId && tsMap[teamId]) ? tsMap[teamId]
+      : lv === 7 ? tsMap.defaultF2
+      : lv === 6 ? tsMap.defaultF3
+      : tsMap.defaultJr;
+
+    const brands = entry ? entry.brands : ['Pirelli', 'Motul'];
+    const basePool = entry ? entry.basePool : 15000;
+    const pts = (p.season && p.season.points) || 0;
+    const wins = (p.season && p.season.wins) || 0;
+    const isRes = Game.systems.career && Game.systems.career.isReserve(p);
+    const mult = isRes ? 0.35 : (0.75 + Math.min(1.5, pts / 180) + wins * 0.08);
+    const estShare = Math.round(basePool * mult / 1000) * 1000;
+
+    return {
+      brands,
+      basePool,
+      estShare
+    };
   };
 
   // ---- Patrocínios ----
@@ -271,11 +304,21 @@
       contractInc += (st.champion ? c.bTitle : 0) + st.wins * c.bWin + st.podiums * c.bPodium + st.points * c.bPoint;
     }
     add('Salário e bônus', contractInc);
+
+    // Cota dos patrocinadores oficiais da equipe (bônus comercial da escuderia)
+    let teamSpInc = 0;
+    if (c && p.teamId) {
+      const ts = E.teamSponsorInfo(s);
+      teamSpInc = ts.estShare;
+      add(`Patrocínios da equipe (${ts.brands.slice(0, 2).join(', ')})`, teamSpInc);
+    }
+
     const acad = Game.systems.contracts && Game.systems.contracts.ensureAcademy(p);
     if (acad && acad.stipend > 0) {
       add(`Bolsa ${acad.name}`, acad.stipend);
     }
 
+    let personalSpInc = 0;
     const remainingSponsors = [];
     p.sponsors.forEach(x => {
       const sp0 = D.sponsors.find(y => y.id === x.id);
@@ -290,12 +333,13 @@
       const bonus = met ? (x.bonus || 0) : 0;
       let pay = basePay * (met ? 1 : .5) + bonus;
       if (c) pay *= 1 - (c.img || 0) / 100;
-      add(`${sp.name}${met ? (bonus ? ' (+bônus)' : '') : ' (meta não cumprida)'}`, pay);
+      personalSpInc += pay;
+      add(`[Pessoal] ${sp.name}${met ? (bonus ? ' (+bônus)' : '') : ' (meta não cumprida)'}`, pay);
       const remYears = (x.years || 1) - 1;
       if (remYears > 0) {
         remainingSponsors.push(Object.assign({}, x, { years: remYears }));
       } else {
-        Game.systems.news.add(`Contrato de patrocínio com ${sp.name} chegou ao fim.`);
+        Game.systems.news.add(`Contrato de patrocínio pessoal com ${sp.name} chegou ao fim.`);
       }
     });
     p.sponsors = remainingSponsors;
@@ -307,12 +351,21 @@
       add(`Investimento: ${d.name}`, delta);
     });
     p.invest = p.invest.filter(i => i.amount > 1);
-    add('Manutenção de bens e equipe', -E.upkeep(s));
+    add('Manutenção, viagens e estilo de vida', -E.upkeep(s));
+
+    // Taxa anual de renovação da Superlicença FIA na F1
+    if (p.catId === 'f1' && st && st.races > 0) {
+      const slFee = Math.round(14000 + (st.points || 0) * 2800);
+      add('Taxa anual Superlicença FIA', -slFee);
+    }
+
     const res = D.residences.find(x => x.id === p.residence);
-    const taxable = Math.max(0, contractInc + U.sum(lines.filter(l => l.label.indexOf('Investimento') < 0 && l.amount > 0 && l.label !== 'Salário e bônus').map(l => l.amount)));
+    const taxable = Math.max(0, contractInc + teamSpInc + personalSpInc + (acad ? acad.stipend || 0 : 0));
     add(`Impostos (${res.name})`, -taxable * res.tax);
     const agObj = Game.systems.contracts ? Game.systems.contracts.ensureAgent(p) : null;
-    if (agObj && contractInc > 0) add(`Comissão (${agObj.name} · ${Math.round(agObj.cut * 100)}%)`, -contractInc * agObj.cut);
+    if (agObj && (contractInc + personalSpInc) > 0) {
+      add(`Comissão (${agObj.name} · ${Math.round(agObj.cut * 100)}%)`, -(contractInc + personalSpInc) * agObj.cut);
+    }
     p.money += income - expense;
     return { lines, net: Math.round(income - expense) };
   };

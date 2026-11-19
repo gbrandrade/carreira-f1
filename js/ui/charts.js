@@ -217,6 +217,107 @@
     return d + ' Z';
   }
 
+
+  /* Representação 2D dinâmica do piloto: capacete com viseira, HANS, macacão na cor da equipe,
+     faixa da academia e patches dos patrocinadores da equipe + pessoais atualizados a cada temporada. */
+  ui.driverAvatar = function (s) {
+    const p = s.player;
+    const catId = p.catId || 'kartReg';
+    const isKart = catId.startsWith('kart');
+    const teamColor = p.teamId ? ui.teamColor(p.teamId, catId) : (p.ownedTeam ? p.ownedTeam.color : '#E80020');
+    const acad = Game.systems.contracts && Game.systems.contracts.ensureAcademy(p);
+    const acadColor = acad ? (acad.color || '#f03a3a') : teamColor;
+
+    // Cor secundária contrastante do macacão
+    const darkSuits = new Set(['#1E41FF', '#3671C6', '#1D4ED8', '#2563EB', '#B41E3A', '#DC0000', '#E80020', '#9333EA']);
+    const isDark = darkSuits.has(teamColor.toUpperCase()) || darkSuits.has(teamColor);
+    const trimCol = isDark ? '#F4F4F6' : '#141416';
+
+    // Patrocinadores da equipe (peito e ombros)
+    const tsInfo = Game.systems.economy && Game.systems.economy.teamSponsorInfo ? Game.systems.economy.teamSponsorInfo(s) : { brands: ['PIRELLI'] };
+    const tBrand1 = (tsInfo.brands[0] || 'TEAM').toUpperCase().slice(0, 10);
+    const tBrand2 = (tsInfo.brands[1] || 'MOTORSPORT').toUpperCase().slice(0, 10);
+
+    // Patrocinadores pessoais (cinto, manga e viseira do capacete)
+    const pBrands = (p.sponsors || []).map(x => {
+      const sp = Game.data.sponsors.find(y => y.id === x.id);
+      return sp ? sp.name.toUpperCase().slice(0, 9) : '';
+    }).filter(Boolean);
+    const visorBrand = pBrands[0] || (acad ? acad.name.split(' ')[0].toUpperCase() : 'FIA');
+    const suitP1 = pBrands[0] || '';
+    const suitP2 = pBrands[1] || '';
+
+    const countryCode = (p.country || 'BRA').toUpperCase();
+    const numTag = p.f1 && p.f1.titles > 0 ? '#1' : (isKart ? 'KART' : catId.toUpperCase());
+
+    const svg = `<svg viewBox="0 0 220 215" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;max-height:13.2rem;display:block">
+      <defs>
+        <linearGradient id="suitGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="${teamColor}" stop-opacity="0.96"/>
+          <stop offset="100%" stop-color="${teamColor}" stop-opacity="0.72"/>
+        </linearGradient>
+        <linearGradient id="visorGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.9"/>
+          <stop offset="50%" stop-color="#0f172a" stop-opacity="0.95"/>
+          <stop offset="100%" stop-color="#f43f5e" stop-opacity="0.75"/>
+        </linearGradient>
+      </defs>
+
+      <!-- Fundo sutil de box / telemetria -->
+      <rect x="8" y="6" width="204" height="203" rx="14" fill="var(--surface-2)" stroke="var(--line-strong)" stroke-width="1"/>
+      <text x="20" y="23" font-size="7.5" font-family="var(--mono)" fill="var(--text-3)" letter-spacing="1">${numTag} · ${countryCode}</text>
+      <text x="200" y="23" text-anchor="end" font-size="7.5" font-family="var(--mono)" fill="var(--text-3)">${s.year}</text>
+
+      <!-- Tronco e Ombros do Macacão -->
+      <path d="M44,198 L48,136 C50,118 68,110 86,108 L134,108 C152,110 170,118 172,136 L176,198 Z" fill="url(#suitGrad)" stroke="${trimCol}" stroke-width="1.5"/>
+
+      <!-- Faixas laterais e detalhe da Academia de Pilotos -->
+      <path d="M62,114 L68,198 L76,198 L72,112 Z" fill="${trimCol}" opacity="0.85"/>
+      <path d="M158,114 L152,198 L144,198 L148,112 Z" fill="${acad ? acadColor : trimCol}" opacity="0.9"/>
+
+      <!-- Colarinho HANS (não aparece no Kart) -->
+      ${!isKart ? `<path d="M76,106 Q110,126 144,106 L149,122 Q110,140 71,122 Z" fill="#18181b" stroke="#52525b" stroke-width="1.2"/>` : ''}
+
+      <!-- Zíper central -->
+      <line x1="110" y1="122" x2="110" y2="198" stroke="${trimCol}" stroke-width="1.4" opacity="0.7"/>
+
+      <!-- Patch Patrocinador Principal da Equipe (Peito) -->
+      <rect x="80" y="135" width="60" height="15" rx="3" fill="#111113" fill-opacity="0.82" stroke="${trimCol}" stroke-width="0.8"/>
+      <text x="110" y="145" text-anchor="middle" font-size="7.2" font-weight="700" font-family="var(--mono)" fill="#ffffff" letter-spacing="0.6">${tBrand1}</text>
+
+      <!-- Patch Segundo Patrocinador da Equipe -->
+      <rect x="84" y="154" width="52" height="12" rx="2.5" fill="#ffffff" fill-opacity="0.92"/>
+      <text x="110" y="162.5" text-anchor="middle" font-size="6.2" font-weight="700" font-family="var(--mono)" fill="#111113" letter-spacing="0.4">${tBrand2}</text>
+
+      <!-- Patches de Patrocinadores Pessoais no Cinto/Abdômen -->
+      ${suitP1 ? `
+        <rect x="76" y="172" width="32" height="12" rx="2.5" fill="var(--accent)" stroke="#fff" stroke-width="0.6"/>
+        <text x="92" y="180.5" text-anchor="middle" font-size="5.6" font-weight="700" font-family="var(--mono)" fill="#fff">${suitP1}</text>
+      ` : ''}
+      ${suitP2 ? `
+        <rect x="112" y="172" width="32" height="12" rx="2.5" fill="#18181b" stroke="var(--accent)" stroke-width="0.8"/>
+        <text x="128" y="180.5" text-anchor="middle" font-size="5.6" font-weight="700" font-family="var(--mono)" fill="#fff">${suitP2}</text>
+      ` : ''}
+
+      <!-- Capacete -->
+      <path d="M74,72 C74,40 146,40 146,72 C146,94 134,108 110,108 C86,108 74,94 74,72 Z" fill="#f8fafc" stroke="#1e293b" stroke-width="1.6"/>
+      <!-- Pintura aerodinâmica do capacete (cor da equipe + academia) -->
+      <path d="M76,66 Q110,46 144,66 L142,56 Q110,36 78,56 Z" fill="${teamColor}"/>
+      <path d="M80,90 Q110,102 140,90 L136,98 Q110,108 84,98 Z" fill="${acadColor}"/>
+
+      <!-- Faixa da Viseira (Patrocinador Pessoal Principal) -->
+      <path d="M77,64 Q110,58 143,64 L144,71 Q110,65 76,71 Z" fill="#09090b"/>
+      <text x="110" y="68.5" text-anchor="middle" font-size="5.3" font-weight="700" font-family="var(--mono)" fill="#f8fafc" letter-spacing="0.8">${visorBrand}</text>
+
+      <!-- Viseira Espelhada -->
+      <path d="M77,71 Q110,66 143,71 C143,84 132,90 110,90 C88,90 77,84 77,71 Z" fill="url(#visorGrad)" stroke="#0f172a" stroke-width="1.2"/>
+      <!-- Reflexo na viseira -->
+      <path d="M84,74 Q102,71 116,74 L112,79 Q98,77 83,79 Z" fill="#ffffff" opacity="0.28"/>
+    </svg>`;
+
+    return svgWrap('driver-avatar', svg);
+  };
+
   ui.radar = function (axes, series, o) {
     o = o || {}; const c = 100, R = 66, min = o.min != null ? o.min : 30, max = o.max || 100, n = axes.length;
     const ang = i => -Math.PI / 2 + i * 2 * Math.PI / n;

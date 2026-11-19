@@ -61,3 +61,21 @@ Game.data.goalText = {
   vitoria: n => `${n} vitórias`,
   pop:     n => `popularidade ${n}+`
 };
+
+/* Patrocinadores oficiais das equipes (aparecem no macacão e geram cota comercial/bônus por resultado da equipe). */
+Game.data.teamSponsors = {
+  rb:  { brands: ['Oracle', 'Bybit', 'Tag Heuer'],      basePool: 650000 },
+  fer: { brands: ['HP', 'Shell', 'Santander'],          basePool: 750000 },
+  mer: { brands: ['Petronas', 'INEOS', 'IWC'],          basePool: 700000 },
+  mcl: { brands: ['OKX', 'Google Chrome', 'Mastercard'],basePool: 650000 },
+  ast: { brands: ['Aramco', 'Cognizant', 'Boss'],       basePool: 450000 },
+  alp: { brands: ['BWT', 'Castrol', 'Microsoft'],       basePool: 380000 },
+  wil: { brands: ['Atlassian', 'Duracell', 'Komatsu'],  basePool: 360000 },
+  aud: { brands: ['Revolut', 'Castrol', 'BP'],          basePool: 340000 },
+  haa: { brands: ['TGR', 'MoneyGram', 'Haas Automation'],basePool: 280000 },
+  rbs: { brands: ['Visa', 'Cash App', 'Hugo'],          basePool: 300000 },
+  cad: { brands: ['Cadillac', 'GM', 'TWG'],             basePool: 260000 },
+  defaultF2: { brands: ['Pirelli', 'Brembo', 'Mecachrome'], basePool: 90000 },
+  defaultF3: { brands: ['Pirelli', 'Dellorto', 'Sparco'],   basePool: 45000 },
+  defaultJr: { brands: ['OMP', 'Motul', 'Arai'],            basePool: 15000 }
+};

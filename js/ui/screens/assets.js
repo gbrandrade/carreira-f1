@@ -180,13 +180,26 @@
       );
     };
 
+    const tsInfo = E.teamSponsorInfo ? E.teamSponsorInfo(s) : { brands: [], estShare: 0 };
+    const teamSpBox = p.teamId
+      ? h('div', { class: 'tile', style: { padding: '.55rem .7rem', gap: '.25rem', borderColor: 'var(--accent-line)', marginBottom: '.35rem' } },
+          h('div', { class: 'row between' },
+            h('span', { class: 'pt' }, 'Patrocinadores Oficiais da Equipe'),
+            ui.badge(`Cota est. ${M(tsInfo.estShare)}/ano`, 'info')
+          ),
+          h('div', { class: 'small' }, h('b', null, tsInfo.brands.join(' · '))),
+          h('div', { class: 'tiny mut' }, 'Estampados no carro e macacão da escuderia; pagam bônus comercial conforme seus pontos na temporada.')
+        )
+      : null;
+
     return h('div', { class: 'cols2' },
       h('div', { class: 'col' },
-        h('div', { class: 'pt' }, `Ativos (${p.sponsors.length}/4)`),
-        p.sponsors.length ? p.sponsors.map(activeRow) : h('div', { class: 'tiny dim' }, 'Nenhum patrocinador ativo.')
+        teamSpBox,
+        h('div', { class: 'pt' }, `Patrocínios Pessoais do Piloto (${p.sponsors.length}/4)`),
+        p.sponsors.length ? p.sponsors.map(activeRow) : h('div', { class: 'tiny dim' }, 'Nenhum patrocinador pessoal ativo.')
       ),
       h('div', { class: 'col' },
-        h('div', { class: 'pt' }, `Propostas disponíveis (${offers.length})`),
+        h('div', { class: 'pt' }, `Propostas Pessoais Disponíveis (${offers.length})`),
         offers.length
           ? ui.paged('sponOffers', offers, 4, items => items.map(offerRow))
           : h('div', { class: 'tiny dim' }, 'Sem propostas agora.')

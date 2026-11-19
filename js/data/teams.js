@@ -136,12 +136,110 @@
   };
 
   Game.data.academies = [
-    { id: 'fda', name: 'Ferrari Driver Academy', f1Teams: ['haa', 'aud', 'fer'], color: '#E80020', sponsorGroup: 'banco' },
-    { id: 'rbjt', name: 'Red Bull Junior Team', f1Teams: ['rbs', 'rb'], color: '#3671C6', sponsorGroup: 'energetico' },
-    { id: 'merc', name: 'Mercedes Junior Team', f1Teams: ['wil', 'mer'], color: '#27F4D2', sponsorGroup: 'petroleo' },
-    { id: 'mcl', name: 'McLaren Driver Development Programme', f1Teams: ['mcl'], color: '#FF8000', sponsorGroup: 'tech' },
-    { id: 'alp', name: 'Alpine Academy', f1Teams: ['alp'], color: '#FF87BC', sponsorGroup: 'agua' },
-    { id: 'wil', name: 'Williams Driver Academy', f1Teams: ['wil'], color: '#64C4FF', sponsorGroup: 'cartao' },
-    { id: 'aud', name: 'Sauber / Audi Academy', f1Teams: ['aud'], color: '#F50537', sponsorGroup: 'telecom' }
+    {
+      id: 'fda',
+      name: 'Ferrari Driver Academy',
+      f1Teams: ['haa', 'aud', 'fer'],
+      partnerTeams: {
+        f4br: ['tmg'],
+        f4eu: ['pre5', 'iro5'],
+        frec: ['pre4'],
+        f3:   ['pre3'],
+        f2:   ['pre2', 'dam2'],
+        f1:   ['haa', 'aud', 'fer']
+      },
+      color: '#E80020',
+      sponsorGroup: 'banco'
+    },
+    {
+      id: 'rbjt',
+      name: 'Red Bull Junior Team',
+      f1Teams: ['rbs', 'rb'],
+      partnerTeams: {
+        f4br: ['tmg'],
+        f4eu: ['cam5', 'var5'],
+        frec: ['mp4', 'var4'],
+        f3:   ['cam3', 'hit3', 'mp3'],
+        f2:   ['cam2', 'hit2', 'mp2'],
+        f1:   ['rbs', 'rb']
+      },
+      color: '#3671C6',
+      sponsorGroup: 'energetico'
+    },
+    {
+      id: 'merc',
+      name: 'Mercedes Junior Team',
+      f1Teams: ['wil', 'mer'],
+      partnerTeams: {
+        f4br: ['cav'],
+        f4eu: ['pre5', 'usr5'],
+        frec: ['pre4', 'art4'],
+        f3:   ['art3', 'pre3'],
+        f2:   ['art2', 'pre2'],
+        f1:   ['wil', 'mer']
+      },
+      color: '#27F4D2',
+      sponsorGroup: 'petroleo'
+    },
+    {
+      id: 'mcl',
+      name: 'McLaren Driver Development Programme',
+      f1Teams: ['mcl'],
+      partnerTeams: {
+        f4br: ['cav'],
+        f4eu: ['rod5', 'usr5'],
+        frec: ['rod4', 'art4'],
+        f3:   ['rod3', 'art3', 'tri3'],
+        f2:   ['rod2', 'art2', 'inv2'],
+        f1:   ['mcl']
+      },
+      color: '#FF8000',
+      sponsorGroup: 'tech'
+    },
+    {
+      id: 'alp',
+      name: 'Alpine Academy',
+      f1Teams: ['alp'],
+      partnerTeams: {
+        f4br: ['b1'],
+        f4eu: ['rac5', 'var5'],
+        frec: ['rac4', 'mp4'],
+        f3:   ['art3', 'mp3', 'hit3'],
+        f2:   ['art2', 'mp2', 'inv2'],
+        f1:   ['alp']
+      },
+      color: '#FF87BC',
+      sponsorGroup: 'agua'
+    },
+    {
+      id: 'wil',
+      name: 'Williams Driver Academy',
+      f1Teams: ['wil'],
+      partnerTeams: {
+        f4br: ['b1'],
+        f4eu: ['rod5', 'var5'],
+        frec: ['rod4', 'mp4'],
+        f3:   ['rod3', 'art3', 'mp3'],
+        f2:   ['art2', 'rod2', 'mp2'],
+        f1:   ['wil']
+      },
+      color: '#64C4FF',
+      sponsorGroup: 'cartao'
+    },
+    {
+      id: 'aud',
+      name: 'Sauber / Audi Academy',
+      f1Teams: ['aud'],
+      partnerTeams: {
+        f4br: ['b2'],
+        f4eu: ['usr5', 'muc5'],
+        frec: ['rac4', 'tri4'],
+        f3:   ['tri3', 'art3'],
+        f2:   ['inv2', 'art2', 'tri2'],
+        f1:   ['aud']
+      },
+      color: '#F50537',
+      sponsorGroup: 'telecom'
+    }
   ];
 })();

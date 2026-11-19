@@ -24,16 +24,21 @@
         h('div', { class: 'row between' }, ['RIT', 'RAC', 'ATE', 'EXP'].map(k => h('div', { class: 'col gap-s center' }, h('span', { class: 'tiny dim mono' }, k), h('b', { class: 'mono' }, Math.round(now[k]), h('span', { class: 'dim', style: { fontWeight: 400 } }, '/' + Math.round(cap[k])))))));
 
       const rep = p.reputation != null ? p.reputation : 45;
-      const estado = ui.panel({ title: 'Estado', right: s.phase === 'season' && p.teamRole ? ui.badge(p.teamRole, p.teamRole === '1º Piloto' ? 'ok' : p.teamRole === 'Piloto Reserva' ? 'info' : '') : null },
-        h('div', { class: 'pt', style: { marginTop: '.1rem' } }, 'Imagem e entorno'),
+      const tsInfo = S.economy.teamSponsorInfo ? S.economy.teamSponsorInfo(s) : { brands: [] };
+      const estado = ui.panel({ title: 'Piloto & Macacão', right: s.phase === 'season' && p.teamRole ? ui.badge(p.teamRole, p.teamRole === '1º Piloto' ? 'ok' : p.teamRole === 'Piloto Reserva' ? 'info' : '') : null },
+        h('div', { style: { height: '11.4rem', display: 'flex', alignItems: 'center', justifyContent: 'center' } }, ui.driverAvatar(s)),
+        tsInfo.brands.length
+          ? h('div', { class: 'row between tiny', style: { padding: '.2rem .4rem', borderRadius: '.4rem', background: 'var(--surface-2)' } },
+              h('span', { class: 'dim mono' }, 'EQUIPE:'),
+              h('span', { class: 'mut mono', style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, tsInfo.brands.join(' · '))
+            )
+          : null,
         ui.bar('Reputação', rep),
         ui.bar('Popular.', p.popularity),
-        ui.bar('Família', p.pressure.family),
-        h('div', { class: 'pt', style: { marginTop: '.4rem' } }, 'Condição física e mental'),
         ui.bar('Físico', p.phys),
         ui.bar('Mente', p.mental),
         (s.phase === 'season' && p.rival)
-          ? h('div', { style: { marginTop: '.2rem', paddingTop: '.35rem', borderTop: '1px solid var(--line)' } },
+          ? h('div', { style: { marginTop: '.15rem', paddingTop: '.25rem', borderTop: '1px solid var(--line)' } },
               h('div', { class: 'row between tiny' },
                 h('span', { class: 'pt' }, 'Rival pelo título'),
                 h('b', { class: 'small' }, p.rival.name)
@@ -41,8 +46,7 @@
               ui.bar('Tensão', p.rival.tension)
             )
           : null,
-        h('div', { class: 'grow' }),
-        p.injury > 0 ? ui.badge(`Lesionado · ${p.injury} etapa(s)`, 'bad') : h('div', { class: 'row', style: { flexWrap: 'wrap' } }, p.traits.map(id => ui.badge(Game.data.traits.find(t => t.id === id).name)))
+        p.injury > 0 ? ui.badge(`Lesionado · ${p.injury} etapa(s)`, 'bad') : null
       );
 
       return h('div', { class: 'screen' }, ui.head(`Olá, ${p.name.split(' ')[0]}`, `${cat.name} · ${s.year}${p.contract ? ' · ' + p.contract.teamName : ''}${acad ? ' · ' + acad.name : ''}`), stats, h('div', { class: 'hubmid' }, radar, estado, this.next(s)));
