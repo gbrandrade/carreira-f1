@@ -6,8 +6,8 @@ Game.config = {
   startAge: 12,
   dataYear: 2026,           // ano em que as notas dos pilotos reais foram medidas
   weights: { EXP: 0.05, RAC: 0.27, ATE: 0.11, RIT: 0.57 },   // fórmula do GER
-  refreshes: 3,             // trocas de carta na roleta
-  rarity: { ruim: 25, mediano: 35, bom: 25, lendario: 13, prime: 2 },
+  refreshes: 5,             // trocas de carta na roleta
+  rarity: { ruim: 8, mediano: 22, bom: 38, lendario: 22, prime: 10 },
   f1MinAge: 18,
   frustratedAge: 28,        // sem superlicença até essa idade = carreira frustrada
   neverF1QuitAge: 32,
@@ -18,7 +18,7 @@ Game.config = {
   eventsPerRound: [1, 2],   // eventos por etapa (mínimo e máximo)
   sprintsByYear: { default: 6, 2027: 10 },
   superlicense: { points: 40, windowYears: 3, kartMax: 12, kartValidYears: 5, minSeasons: 2 },
-  luckRange: [-4, 1],       // sorte aplicada ao teto de cada atributo na criação
+  luckRange: [-1, 3],       // sorte aplicada ao teto de cada atributo na criação
   trainCap: 6,
   assetSellRate: 0.7
 };
